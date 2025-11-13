@@ -1,20 +1,18 @@
-# ShellyPlug Exporter
+# Ruuvi Exporter
 
-Periodically get information from a [Shelly Plus Plug S](https://www.shelly.com/de/products/shop/shelly-plus-plug-s-1) and publish it as Prometheus metrics.
+Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2) of the protocol so far.
 
 ## Exposed metrics
 
-Output button state, power, voltage, current, total energy, temperature (in °C), updates available and last update time.
+Output temperature (in °C), humidity (in %RH), pressure (in hPa), acceleration (in g), battery voltage (in mV), signal strength (in dBm), last updated and number of messages received, per Ruuvi tag.
 
 # How to run
 
 Build and run with Docker:
 
 ```sh
-docker build -t shellyplug-exporter .
+docker build -t ruuvi-prometheus-rs .
 docker run -it --rm \
-    -e SHELLYPLUG_URL=host/ip_address \
     -e PORT=9185 \
-    -e PERIOD=60 \
-    shellyplug-exporter
+    ruuvi-prometheus-rs
 ```
