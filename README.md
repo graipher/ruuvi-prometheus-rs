@@ -4,7 +4,7 @@ Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com
 
 ## Exposed metrics
 
-Output temperature (in °C), humidity (in %RH), pressure (in hPa), acceleration (in g), battery voltage (in mV), signal strength (in dBm), last updated and number of messages received, per Ruuvi tag.
+Output temperature (in °C), humidity (in %RH), dew point (in °C), pressure (in hPa), acceleration (in g), battery voltage (in mV), signal strength (in dBm), last updated and number of messages received, per Ruuvi tag.
 
 # How to run
 

@@ -10,6 +10,7 @@ pub struct Metrics {
     pub ruuvi_frames: Arc<CounterVec>,
     pub temperature: Arc<GaugeVec>,
     pub humidity: Arc<GaugeVec>,
+    pub dew_point: Arc<GaugeVec>,
     pub pressure: Arc<GaugeVec>,
     pub acceleration: Arc<GaugeVec>,
     pub voltage: Arc<GaugeVec>,
@@ -43,6 +44,11 @@ impl Metrics {
             humidity: gauge_vec(
                 "ruuvi_humidity_ratio",
                 "Ruuvi tag sensor relative humidity",
+                &["device"],
+            ),
+            dew_point: gauge_vec(
+                "ruuvi_dew_point_celsius",
+                "Calculated dew point derived from temperature and humidity",
                 &["device"],
             ),
             pressure: gauge_vec(

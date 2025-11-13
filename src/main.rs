@@ -82,41 +82,64 @@ async fn main() -> bluer::Result<()> {
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .inc();
+                                                    let temperature = v5.temperature.unwrap();
+                                                    let humidity = v5.humidity.unwrap() / 100.0;
                                                     metrics
                                                         .temperature
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
-                                                        .set(v5.temperature.unwrap());
+                                                        .set(temperature);
                                                     metrics
                                                         .humidity
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
-                                                        .set(v5.humidity.unwrap());
+                                                        .set(humidity);
+                                                    if let Some(dew_point) =
+                                                        dew_point_celsius(temperature, humidity)
+                                                    {
+                                                        metrics
+                                                            .dew_point
+                                                            .get_metric_with_label_values(&[&addr])
+                                                            .unwrap()
+                                                            .set(dew_point);
+                                                    }
                                                     metrics
                                                         .pressure
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
-                                                        .set(v5.pressure.unwrap());
+                                                        .set(v5.pressure.unwrap() / 100.0);
                                                     metrics
                                                         .voltage
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
-                                                        .set(v5.battery_voltage.unwrap() as f64);
+                                                        .set(
+                                                            v5.battery_voltage.unwrap() as f64
+                                                                / 1000.0,
+                                                        );
                                                     metrics
                                                         .acceleration
                                                         .get_metric_with_label_values(&[&addr, "X"])
                                                         .unwrap()
-                                                        .set(v5.acceleration_x.unwrap() as f64);
+                                                        .set(
+                                                            v5.acceleration_x.unwrap() as f64
+                                                                / 1000.0,
+                                                        );
                                                     metrics
                                                         .acceleration
                                                         .get_metric_with_label_values(&[&addr, "Y"])
                                                         .unwrap()
-                                                        .set(v5.acceleration_y.unwrap() as f64);
+                                                        .set(
+                                                            v5.acceleration_y.unwrap() as f64
+                                                                / 1000.0,
+                                                        );
                                                     metrics
                                                         .acceleration
                                                         .get_metric_with_label_values(&[&addr, "Z"])
                                                         .unwrap()
-                                                        .set(v5.acceleration_z.unwrap() as f64);
+                                                        .set(
+                                                            v5.acceleration_z.unwrap() as f64
+                                                                / 1000.0,
+                                                        );
                                                     metrics
                                                         .tx_power
                                                         .get_metric_with_label_values(&[&addr])
@@ -136,21 +159,32 @@ async fn main() -> bluer::Result<()> {
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .inc();
+                                                    let temperature = v6.temperature.unwrap();
                                                     metrics
                                                         .temperature
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
-                                                        .set(v6.temperature.unwrap());
+                                                        .set(temperature);
+                                                    let humidity = v6.humidity.unwrap() / 100.0;
                                                     metrics
                                                         .humidity
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
-                                                        .set(v6.humidity.unwrap());
+                                                        .set(humidity);
+                                                    if let Some(dew_point) =
+                                                        dew_point_celsius(temperature, humidity)
+                                                    {
+                                                        metrics
+                                                            .dew_point
+                                                            .get_metric_with_label_values(&[&addr])
+                                                            .unwrap()
+                                                            .set(dew_point);
+                                                    }
                                                     metrics
                                                         .pressure
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
-                                                        .set(v6.pressure.unwrap());
+                                                        .set(v6.pressure.unwrap() / 100.0);
                                                     metrics
                                                         .seqno
                                                         .get_metric_with_label_values(&[&addr])
@@ -228,6 +262,30 @@ async fn main() -> bluer::Result<()> {
     }
 
     Ok(())
+}
+
+const DEW_POINT_B: f64 = 17.368;
+const DEW_POINT_C: f64 = 238.88;
+
+fn dew_point_celsius(temperature_c: f64, humidity_percent: f64) -> Option<f64> {
+    if !(0.0..=1.0).contains(&humidity_percent) || humidity_percent <= 0.0 {
+        return None;
+    }
+
+    if (DEW_POINT_C + temperature_c).abs() < f64::EPSILON {
+        return None;
+    }
+
+    let gamma = dew_point_gamma(temperature_c, humidity_percent);
+    if (DEW_POINT_B - gamma).abs() < f64::EPSILON {
+        return None;
+    }
+
+    Some(DEW_POINT_C * gamma / (DEW_POINT_B - gamma))
+}
+
+fn dew_point_gamma(temperature_c: f64, humidity_percent: f64) -> f64 {
+    humidity_percent.ln() + (DEW_POINT_B * temperature_c) / (DEW_POINT_C + temperature_c)
 }
 
 fn format_device_address(address: &bluer::Address) -> String {

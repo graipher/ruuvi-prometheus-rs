@@ -14,7 +14,7 @@ opt-level = 3
 serde_json = "1.0.140"
 tokio = { version = "1.43.1", features = ["rt", "rt-multi-thread", "macros"] }
 serde = { version = "1.0.218", features = ["derive"] }
-prometheus_exporter = "0.8.5"
+prometheus_exporter = { version = "0.8.5" }
 compile-time = "0.2.0"
 ruuvi-decoders = "1.0.0"
 bluer = { version = "0.17.4", features = ["bluetoothd", "tokio-stream"] }
