@@ -1,147 +1,139 @@
-use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use metrics::{counter, describe_counter, describe_gauge, gauge};
 
-use prometheus_exporter::prometheus::{
-    CounterVec, GaugeVec, register_counter_vec, register_gauge, register_gauge_vec,
-};
-
-#[derive(Clone)]
-pub struct Metrics {
-    pub ruuvi_frames: Arc<CounterVec>,
-    pub temperature: Arc<GaugeVec>,
-    pub humidity: Arc<GaugeVec>,
-    pub dew_point: Arc<GaugeVec>,
-    pub pressure: Arc<GaugeVec>,
-    pub acceleration: Arc<GaugeVec>,
-    pub voltage: Arc<GaugeVec>,
-    pub signal_rssi: Arc<GaugeVec>,
-    pub tx_power: Arc<GaugeVec>,
-    pub seqno: Arc<GaugeVec>,
-    pub pm2_5: Arc<GaugeVec>,
-    pub co2: Arc<GaugeVec>,
-    pub voc: Arc<GaugeVec>,
-    pub nox: Arc<GaugeVec>,
-    pub calibrating: Arc<GaugeVec>,
-    pub last_updated_ruuvi: Arc<GaugeVec>,
-}
+#[derive(Clone, Copy)]
+pub struct Metrics;
 
 impl Metrics {
+    const LABEL_DEVICE: &'static str = "device";
+    const LABEL_AXIS: &'static str = "axis";
+
     pub fn register() -> Self {
-        record_process_start_time();
+        Self::describe_metrics();
         record_rust_info();
-
-        Self {
-            ruuvi_frames: counter_vec(
-                "ruuvi_frames_total",
-                "Total Ruuvi frames received",
-                &["device"],
-            ),
-            temperature: gauge_vec(
-                "ruuvi_temperature_celsius",
-                "Ruuvi tag sensor temperature",
-                &["device"],
-            ),
-            humidity: gauge_vec(
-                "ruuvi_humidity_ratio",
-                "Ruuvi tag sensor relative humidity",
-                &["device"],
-            ),
-            dew_point: gauge_vec(
-                "ruuvi_dew_point_celsius",
-                "Calculated dew point derived from temperature and humidity",
-                &["device"],
-            ),
-            pressure: gauge_vec(
-                "ruuvi_pressure_hpa",
-                "Ruuvi tag sensor air pressure",
-                &["device"],
-            ),
-            acceleration: gauge_vec(
-                "ruuvi_acceleration_g",
-                "Ruuvi tag sensor acceleration X/Y/Z",
-                &["device", "axis"],
-            ),
-            voltage: gauge_vec(
-                "ruuvi_battery_volts",
-                "Ruuvi tag battery voltage",
-                &["device"],
-            ),
-            signal_rssi: gauge_vec(
-                "ruuvi_rssi_dbm",
-                "Ruuvi tag received signal strength RSSI",
-                &["device"],
-            ),
-            tx_power: gauge_vec(
-                "ruuvi_txpower_dbm",
-                "Ruuvi transmit power in dBm",
-                &["device"],
-            ),
-            seqno: gauge_vec(
-                "ruuvi_seqno_current",
-                "Ruuvi frame sequence number",
-                &["device"],
-            ),
-            pm2_5: gauge_vec(
-                "ruuvi_pm2_5_ug_m3",
-                "Ruuvi PM2.5 concentration in ug/m3",
-                &["device"],
-            ),
-            co2: gauge_vec(
-                "ruuvi_co2_ppm",
-                "Ruuvi CO2 concentration in ppm",
-                &["device"],
-            ),
-            voc: gauge_vec("ruuvi_voc_index", "Ruuvi VOC index", &["device"]),
-            nox: gauge_vec("ruuvi_nox_index", "Ruuvi NOx index", &["device"]),
-            calibrating: gauge_vec("ruuvi_air_calibrating", "Ruuvi calibrating", &["device"]),
-            last_updated_ruuvi: gauge_vec(
-                "ruuvi_last_updated",
-                "Last update of RuuviTag",
-                &["device"],
-            ),
-        }
+        Self
     }
-}
 
-fn counter_vec(name: &str, help: &str, labels: &[&str]) -> Arc<CounterVec> {
-    Arc::new(
-        register_counter_vec!(name, help, labels)
-            .unwrap_or_else(|err| panic!("failed to register counter {}: {}", name, err)),
-    )
-}
+    pub fn inc_ruuvi_frames(&self, device: &str) {
+        let device_label = device.to_owned();
+        counter!("ruuvi_frames_total", Self::LABEL_DEVICE => device_label).increment(1);
+    }
 
-fn gauge_vec(name: &str, help: &str, labels: &[&str]) -> Arc<GaugeVec> {
-    Arc::new(
-        register_gauge_vec!(name, help, labels)
-            .unwrap_or_else(|err| panic!("failed to register gauge {}: {}", name, err)),
-    )
-}
+    pub fn set_temperature(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_temperature_celsius", Self::LABEL_DEVICE => device_label).set(value);
+    }
 
-fn record_process_start_time() {
-    let process_start_time =
-        register_gauge!("process_start_time_seconds", "Start time of the process")
-            .unwrap_or_else(|err| panic!("failed to register process start time gauge: {}", err));
-    process_start_time.set(unix_timestamp());
+    pub fn set_humidity(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_humidity_ratio", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_dew_point(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_dew_point_celsius", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_pressure(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_pressure_hpa", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_acceleration(&self, device: &str, axis: &str, value: f64) {
+        let device_label = device.to_owned();
+        let axis_label = axis.to_owned();
+        gauge!(
+            "ruuvi_acceleration_g",
+            Self::LABEL_DEVICE => device_label,
+            Self::LABEL_AXIS => axis_label
+        )
+        .set(value);
+    }
+
+    pub fn set_voltage(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_battery_volts", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_signal_rssi(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_rssi_dbm", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_tx_power(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_txpower_dbm", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_seqno(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_seqno_current", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_pm2_5(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_pm2_5_ug_m3", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_co2(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_co2_ppm", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_voc(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_voc_index", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_nox(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_nox_index", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_calibrating(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_air_calibrating", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_last_updated(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_last_updated", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    fn describe_metrics() {
+        describe_counter!("ruuvi_frames_total", "Total Ruuvi frames received");
+        describe_gauge!("ruuvi_temperature_celsius", "Ruuvi tag sensor temperature");
+        describe_gauge!("ruuvi_humidity_ratio", "Ruuvi tag sensor relative humidity");
+        describe_gauge!(
+            "ruuvi_dew_point_celsius",
+            "Calculated dew point derived from temperature and humidity"
+        );
+        describe_gauge!("ruuvi_pressure_hpa", "Ruuvi tag sensor air pressure");
+        describe_gauge!(
+            "ruuvi_acceleration_g",
+            "Ruuvi tag sensor acceleration X/Y/Z"
+        );
+        describe_gauge!("ruuvi_battery_volts", "Ruuvi tag battery voltage");
+        describe_gauge!("ruuvi_rssi_dbm", "Ruuvi tag received signal strength RSSI");
+        describe_gauge!("ruuvi_txpower_dbm", "Ruuvi transmit power in dBm");
+        describe_gauge!("ruuvi_seqno_current", "Ruuvi frame sequence number");
+        describe_gauge!("ruuvi_pm2_5_ug_m3", "Ruuvi PM2.5 concentration in ug/m3");
+        describe_gauge!("ruuvi_co2_ppm", "Ruuvi CO2 concentration in ppm");
+        describe_gauge!("ruuvi_voc_index", "Ruuvi VOC index");
+        describe_gauge!("ruuvi_nox_index", "Ruuvi NOx index");
+        describe_gauge!("ruuvi_air_calibrating", "Ruuvi calibrating");
+        describe_gauge!("ruuvi_last_updated", "Last update of RuuviTag");
+        describe_gauge!("rust_info", "Info about the Rust version");
+    }
 }
 
 fn record_rust_info() {
     let compile_datetime = compile_time::datetime_str!();
     let rustc_version = compile_time::rustc_version_str!();
-    let rust_info = register_gauge_vec!(
+    gauge!(
         "rust_info",
-        "Info about the Rust version",
-        &["rustc_version", "compile_time", "version"]
+        "rustc_version" => rustc_version,
+        "compile_time" => compile_datetime,
+        "version" => env!("CARGO_PKG_VERSION")
     )
-    .unwrap_or_else(|err| panic!("failed to register rust_info gauge: {}", err));
-    rust_info
-        .get_metric_with_label_values(&[rustc_version, compile_datetime, env!("CARGO_PKG_VERSION")])
-        .unwrap()
-        .set(1.);
-}
-
-fn unix_timestamp() -> f64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as f64
+    .set(1.0);
 }
