@@ -15,7 +15,7 @@ RUN useradd \
 
 RUN apt-get update \
     && apt-get -y upgrade \
-    && apt-get -y --no-install-recommends install pkg-config make g++ libssl-dev \
+    && apt-get -y --no-install-recommends install pkg-config make g++ libssl-dev libdbus-1-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
