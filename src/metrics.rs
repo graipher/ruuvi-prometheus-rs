@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use prometheus_exporter::prometheus::{
-    CounterVec, Gauge, GaugeVec, register_counter_vec, register_gauge, register_gauge_vec,
+    CounterVec, GaugeVec, register_counter_vec, register_gauge, register_gauge_vec,
 };
 
 #[derive(Clone)]
