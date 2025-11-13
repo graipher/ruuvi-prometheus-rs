@@ -96,8 +96,39 @@ async fn main() -> bluer::Result<()> {
         )
         .unwrap(),
     );
+    let seqno = Arc::new(
+        register_gauge_vec!(
+            "ruuvi_seqno_current",
+            "Ruuvi frame sequence number",
+            &["device"]
+        )
+        .unwrap(),
+    );
+    let pm2_5 = Arc::new(
+        register_gauge_vec!(
+            "ruuvi_pm2_5_ug_m3",
+            "Ruuvi PM2.5 concentration in ug/m3",
+            &["device"]
+        )
+        .unwrap(),
+    );
+    let co2 = Arc::new(
+        register_gauge_vec!(
+            "ruuvi_co2_ppm",
+            "Ruuvi CO2 concentration in ppm",
+            &["device"]
+        )
+        .unwrap(),
+    );
+    let voc =
+        Arc::new(register_gauge_vec!("ruuvi_voc_index", "Ruuvi VOC index", &["device"]).unwrap());
+    let nox =
+        Arc::new(register_gauge_vec!("ruuvi_nox_index", "Ruuvi NOx index", &["device"]).unwrap());
+    let calibrating = Arc::new(
+        register_gauge_vec!("ruuvi_air_calibrating", "Ruuvi calibrating", &["device"]).unwrap(),
+    );
     let last_updated_ruuvi = Arc::new(
-        register_gauge_vec!("ruuvi_last_updated", "Last update of RuuviTag", &["mac"]).unwrap(),
+        register_gauge_vec!("ruuvi_last_updated", "Last update of RuuviTag", &["device"]).unwrap(),
     );
     let process_start_time =
         register_gauge!("process_start_time_seconds", "Start time of the process").unwrap();
@@ -154,6 +185,12 @@ async fn main() -> bluer::Result<()> {
             let acceleration = Arc::clone(&acceleration);
             let signal_rssi = Arc::clone(&signal_rssi);
             let tx_power = Arc::clone(&tx_power);
+            let seqno = Arc::clone(&seqno);
+            let pm2_5 = Arc::clone(&pm2_5);
+            let co2 = Arc::clone(&co2);
+            let voc = Arc::clone(&voc);
+            let nox = Arc::clone(&nox);
+            let calibrating = Arc::clone(&calibrating);
             tokio::spawn(async move {
                 let mut events = dev.events().await.unwrap();
                 while let Some(ev) = events.next().await {
@@ -207,6 +244,12 @@ async fn main() -> bluer::Result<()> {
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v5.tx_power.unwrap() as f64);
+                                                    seqno
+                                                        .get_metric_with_label_values(&[&addr])
+                                                        .unwrap()
+                                                        .set(
+                                                            v5.measurement_sequence.unwrap() as f64
+                                                        );
                                                 }
                                                 RuuviData::V6(v6) => {
                                                     ruuvi_frames
@@ -225,6 +268,29 @@ async fn main() -> bluer::Result<()> {
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v6.pressure.unwrap());
+                                                    seqno
+                                                        .get_metric_with_label_values(&[&addr])
+                                                        .unwrap()
+                                                        .set(
+                                                            v6.measurement_sequence.unwrap() as f64
+                                                        );
+                                                    pm2_5
+                                                        .get_metric_with_label_values(&[&addr])
+                                                        .unwrap()
+                                                        .set(v6.pm2_5.unwrap());
+                                                    co2.get_metric_with_label_values(&[&addr])
+                                                        .unwrap()
+                                                        .set(v6.co2.unwrap() as f64);
+                                                    voc.get_metric_with_label_values(&[&addr])
+                                                        .unwrap()
+                                                        .set(v6.voc_index.unwrap() as f64);
+                                                    nox.get_metric_with_label_values(&[&addr])
+                                                        .unwrap()
+                                                        .set(v6.nox_index.unwrap() as f64);
+                                                    // calibrating
+                                                    //     .get_metric_with_label_values(&[&addr])
+                                                    //     .unwrap()
+                                                    //     .set(v6.flags as f64);
                                                 }
                                                 _ => {}
                                             }
