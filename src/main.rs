@@ -1,14 +1,18 @@
+use std::collections::HashSet;
 use std::env;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use bluer::DeviceEvent;
 use bluer::DeviceProperty::{ManufacturerData, Rssi};
+use bluer::monitor::data_type::MANUFACTURER_SPECIFIC_DATA;
 use bluer::monitor::{Monitor, MonitorEvent, Pattern, RssiSamplingPeriod};
 use futures::StreamExt;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_process::Collector as ProcessCollector;
 use ruuvi_decoders::{self, RuuviData};
+use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 
 mod metrics;
@@ -37,7 +41,7 @@ async fn main() -> bluer::Result<()> {
     });
 
     let adapter_name = Some("hci0".to_string());
-    let data_type: u8 = 0xff;
+    let data_type: u8 = MANUFACTURER_SPECIFIC_DATA;
     let start_position: u8 = 0x00;
     let content: Vec<u8> = vec![0x99, 0x04];
     let pattern = Pattern {
@@ -52,6 +56,7 @@ async fn main() -> bluer::Result<()> {
     };
 
     let metrics = Metrics::register();
+    let active_devices = Arc::new(Mutex::new(HashSet::new()));
 
     println!(
         "Running le_passive_scan on adapter {} with or-pattern {:?}",
@@ -77,128 +82,154 @@ async fn main() -> bluer::Result<()> {
         if let MonitorEvent::DeviceFound(devid) = mevt {
             println!("Discovered device {:?}", devid);
             let dev = adapter.device(devid.device)?;
+            println!(
+                "Advertising data: {:?}",
+                dev.all_properties().await.unwrap()
+            );
+            let addr = format_device_address(&dev.address());
+
+            let mut active = active_devices.lock().await;
+            if !active.insert(addr.clone()) {
+                continue;
+            }
+            drop(active);
+
             let metrics = metrics.clone();
+            let active_devices = active_devices.clone();
             tokio::spawn(async move {
-                let mut events = dev.events().await.unwrap();
-                while let Some(ev) = events.next().await {
-                    let addr = format_device_address(&dev.address());
+                let result: bluer::Result<()> = async {
+                    let mut events = dev.events().await?;
+                    while let Some(ev) = events.next().await {
+                        match ev {
+                            DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
+                                match data.get(&0x0499) {
+                                    Some(value) => {
+                                        let hex: String =
+                                            value.iter().map(|b| format!("{:02x}", b)).collect();
+                                        match ruuvi_decoders::decode(hex.as_str()) {
+                                            Ok(data) => {
+                                                println!("{:?}", data);
 
-                    match ev {
-                        DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
-                            match data.get(&0x0499) {
-                                Some(value) => {
-                                    let hex: String =
-                                        value.iter().map(|b| format!("{:02x}", b)).collect();
-                                    match ruuvi_decoders::decode(hex.as_str()) {
-                                        Ok(data) => {
-                                            println!("{:?}", data);
+                                                match data {
+                                                    RuuviData::V5(v5) => {
+                                                        metrics.inc_ruuvi_frames(&addr);
+                                                        let temperature = v5.temperature.unwrap();
+                                                        let humidity = v5.humidity.unwrap() / 100.0;
+                                                        metrics.set_temperature(&addr, temperature);
+                                                        metrics.set_humidity(&addr, humidity);
+                                                        if let Some(dew_point) =
+                                                            dew_point_celsius(temperature, humidity)
+                                                        {
+                                                            metrics.set_dew_point(&addr, dew_point);
+                                                        }
+                                                        metrics.set_pressure(
+                                                            &addr,
+                                                            v5.pressure.unwrap() / 100.0,
+                                                        );
+                                                        metrics.set_voltage(
+                                                            &addr,
+                                                            v5.battery_voltage.unwrap() as f64
+                                                                / 1000.0,
+                                                        );
+                                                        metrics.set_acceleration(
+                                                            &addr,
+                                                            "X",
+                                                            v5.acceleration_x.unwrap() as f64
+                                                                / 1000.0,
+                                                        );
+                                                        metrics.set_acceleration(
+                                                            &addr,
+                                                            "Y",
+                                                            v5.acceleration_y.unwrap() as f64
+                                                                / 1000.0,
+                                                        );
+                                                        metrics.set_acceleration(
+                                                            &addr,
+                                                            "Z",
+                                                            v5.acceleration_z.unwrap() as f64
+                                                                / 1000.0,
+                                                        );
+                                                        metrics.set_tx_power(
+                                                            &addr,
+                                                            v5.tx_power.unwrap() as f64,
+                                                        );
+                                                        metrics.set_seqno(
+                                                            &addr,
+                                                            v5.measurement_sequence.unwrap() as f64,
+                                                        );
+                                                    }
+                                                    RuuviData::V6(v6) => {
+                                                        metrics.inc_ruuvi_frames(&addr);
+                                                        let temperature = v6.temperature.unwrap();
+                                                        let humidity = v6.humidity.unwrap() / 100.0;
+                                                        metrics.set_temperature(&addr, temperature);
+                                                        metrics.set_humidity(&addr, humidity);
+                                                        if let Some(dew_point) =
+                                                            dew_point_celsius(temperature, humidity)
+                                                        {
+                                                            metrics.set_dew_point(&addr, dew_point);
+                                                        }
+                                                        metrics.set_pressure(
+                                                            &addr,
+                                                            v6.pressure.unwrap() / 100.0,
+                                                        );
+                                                        metrics.set_seqno(
+                                                            &addr,
+                                                            v6.measurement_sequence.unwrap() as f64,
+                                                        );
+                                                        metrics.set_pm2_5(&addr, v6.pm2_5.unwrap());
+                                                        metrics
+                                                            .set_co2(&addr, v6.co2.unwrap() as f64);
+                                                        metrics.set_voc(
+                                                            &addr,
+                                                            v6.voc_index.unwrap() as f64,
+                                                        );
+                                                        metrics.set_nox(
+                                                            &addr,
+                                                            v6.nox_index.unwrap() as f64,
+                                                        );
+                                                        let calibrating =
+                                                            if (v6.flags & 0b0000_0001) != 0 {
+                                                                1.0
+                                                            } else {
+                                                                0.0
+                                                            };
+                                                        metrics.set_calibrating(&addr, calibrating);
+                                                    }
+                                                    _ => {}
+                                                }
 
-                                            match data {
-                                                RuuviData::V5(v5) => {
-                                                    metrics.inc_ruuvi_frames(&addr);
-                                                    let temperature = v5.temperature.unwrap();
-                                                    let humidity = v5.humidity.unwrap() / 100.0;
-                                                    metrics.set_temperature(&addr, temperature);
-                                                    metrics.set_humidity(&addr, humidity);
-                                                    if let Some(dew_point) =
-                                                        dew_point_celsius(temperature, humidity)
-                                                    {
-                                                        metrics.set_dew_point(&addr, dew_point);
-                                                    }
-                                                    metrics.set_pressure(
-                                                        &addr,
-                                                        v5.pressure.unwrap() / 100.0,
-                                                    );
-                                                    metrics.set_voltage(
-                                                        &addr,
-                                                        v5.battery_voltage.unwrap() as f64 / 1000.0,
-                                                    );
-                                                    metrics.set_acceleration(
-                                                        &addr,
-                                                        "X",
-                                                        v5.acceleration_x.unwrap() as f64 / 1000.0,
-                                                    );
-                                                    metrics.set_acceleration(
-                                                        &addr,
-                                                        "Y",
-                                                        v5.acceleration_y.unwrap() as f64 / 1000.0,
-                                                    );
-                                                    metrics.set_acceleration(
-                                                        &addr,
-                                                        "Z",
-                                                        v5.acceleration_z.unwrap() as f64 / 1000.0,
-                                                    );
-                                                    metrics.set_tx_power(
-                                                        &addr,
-                                                        v5.tx_power.unwrap() as f64,
-                                                    );
-                                                    metrics.set_seqno(
-                                                        &addr,
-                                                        v5.measurement_sequence.unwrap() as f64,
-                                                    );
-                                                }
-                                                RuuviData::V6(v6) => {
-                                                    metrics.inc_ruuvi_frames(&addr);
-                                                    let temperature = v6.temperature.unwrap();
-                                                    let humidity = v6.humidity.unwrap() / 100.0;
-                                                    metrics.set_temperature(&addr, temperature);
-                                                    metrics.set_humidity(&addr, humidity);
-                                                    if let Some(dew_point) =
-                                                        dew_point_celsius(temperature, humidity)
-                                                    {
-                                                        metrics.set_dew_point(&addr, dew_point);
-                                                    }
-                                                    metrics.set_pressure(
-                                                        &addr,
-                                                        v6.pressure.unwrap() / 100.0,
-                                                    );
-                                                    metrics.set_seqno(
-                                                        &addr,
-                                                        v6.measurement_sequence.unwrap() as f64,
-                                                    );
-                                                    metrics.set_pm2_5(&addr, v6.pm2_5.unwrap());
-                                                    metrics.set_co2(&addr, v6.co2.unwrap() as f64);
-                                                    metrics.set_voc(
-                                                        &addr,
-                                                        v6.voc_index.unwrap() as f64,
-                                                    );
-                                                    metrics.set_nox(
-                                                        &addr,
-                                                        v6.nox_index.unwrap() as f64,
-                                                    );
-                                                    let calibrating =
-                                                        if (v6.flags & 0b0000_0001) != 0 {
-                                                            1.0
-                                                        } else {
-                                                            0.0
-                                                        };
-                                                    metrics.set_calibrating(&addr, calibrating);
-                                                }
-                                                _ => {}
+                                                let timestamp = SystemTime::now()
+                                                    .duration_since(SystemTime::UNIX_EPOCH)
+                                                    .unwrap()
+                                                    .as_secs()
+                                                    as f64;
+                                                metrics.set_last_updated(&addr, timestamp);
                                             }
-
-                                            let timestamp = SystemTime::now()
-                                                .duration_since(SystemTime::UNIX_EPOCH)
-                                                .unwrap()
-                                                .as_secs()
-                                                as f64;
-                                            metrics.set_last_updated(&addr, timestamp);
-                                        }
-                                        Err(err) => println!("Error decoding data: {}", err),
-                                    };
+                                            Err(err) => println!("Error decoding data: {}", err),
+                                        };
+                                    }
+                                    None => println!("No value found"),
                                 }
-                                None => println!("No value found"),
+                            }
+                            DeviceEvent::PropertyChanged(Rssi(rssi)) => {
+                                metrics.set_signal_rssi(&addr, rssi as f64);
+                                println!("{:?} RSSI: {}", dev, rssi);
+                            }
+                            _ => {
+                                println!("Unknown event: {:?}", ev)
                             }
                         }
-                        DeviceEvent::PropertyChanged(Rssi(rssi)) => {
-                            metrics.set_signal_rssi(&addr, rssi as f64);
-                            println!("{:?} RSSI: {}", dev, rssi);
-                        }
-                        _ => {
-                            println!("Unknown event: {:?}", ev)
-                        }
                     }
+                    Ok(())
                 }
+                .await;
+
+                if let Err(err) = result {
+                    eprintln!("Error processing device {}: {}", addr, err);
+                }
+
+                active_devices.lock().await.remove(&addr);
             });
         }
     }
