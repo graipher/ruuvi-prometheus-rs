@@ -1,14 +1,15 @@
 use std::env;
-use std::sync::Arc;
 use std::time::SystemTime;
 
 use bluer::DeviceEvent;
 use bluer::DeviceProperty::{ManufacturerData, Rssi};
 use bluer::monitor::{Monitor, MonitorEvent, Pattern, RssiSamplingPeriod};
 use futures::StreamExt;
-use prometheus_exporter::prometheus::register_counter_vec;
-use prometheus_exporter::{self, prometheus::register_gauge, prometheus::register_gauge_vec};
+use prometheus_exporter;
 use ruuvi_decoders::{self, RuuviData};
+
+mod metrics;
+use crate::metrics::Metrics;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
@@ -32,125 +33,7 @@ async fn main() -> bluer::Result<()> {
         None => session.default_adapter().await?,
     };
 
-    let ruuvi_frames = Arc::new(
-        register_counter_vec!(
-            "ruuvi_frames_total",
-            "Total Ruuvi frames received",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let temperature = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_temperature_celsius",
-            "Ruuvi tag sensor temperature",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let humidity = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_humidity_ratio",
-            "Ruuvi tag sensor relative humidity",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let pressure = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_pressure_hpa",
-            "Ruuvi tag sensor air pressure",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let acceleration = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_acceleration_g",
-            "Ruuvi tag sensor acceleration X/Y/Z",
-            &["device", "axis"]
-        )
-        .unwrap(),
-    );
-    let voltage = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_battery_volts",
-            "Ruuvi tag battery voltage",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let signal_rssi = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_rssi_dbm",
-            "Ruuvi tag received signal strength RSSI",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let tx_power = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_txpower_dbm",
-            "Ruuvi transmit power in dBm",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let seqno = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_seqno_current",
-            "Ruuvi frame sequence number",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let pm2_5 = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_pm2_5_ug_m3",
-            "Ruuvi PM2.5 concentration in ug/m3",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let co2 = Arc::new(
-        register_gauge_vec!(
-            "ruuvi_co2_ppm",
-            "Ruuvi CO2 concentration in ppm",
-            &["device"]
-        )
-        .unwrap(),
-    );
-    let voc =
-        Arc::new(register_gauge_vec!("ruuvi_voc_index", "Ruuvi VOC index", &["device"]).unwrap());
-    let nox =
-        Arc::new(register_gauge_vec!("ruuvi_nox_index", "Ruuvi NOx index", &["device"]).unwrap());
-    let calibrating = Arc::new(
-        register_gauge_vec!("ruuvi_air_calibrating", "Ruuvi calibrating", &["device"]).unwrap(),
-    );
-    let last_updated_ruuvi = Arc::new(
-        register_gauge_vec!("ruuvi_last_updated", "Last update of RuuviTag", &["device"]).unwrap(),
-    );
-    let process_start_time =
-        register_gauge!("process_start_time_seconds", "Start time of the process").unwrap();
-    process_start_time.set(
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs() as f64,
-    );
-
-    let compile_datetime = compile_time::datetime_str!();
-    let rustc_version = compile_time::rustc_version_str!();
-    let rust_info = register_gauge_vec!(
-        "rust_info",
-        "Info about the Rust version",
-        &["rustc_version", "compile_time", "version"]
-    )
-    .unwrap();
-    rust_info
-        .get_metric_with_label_values(&[rustc_version, compile_datetime, env!("CARGO_PKG_VERSION")])
-        .unwrap()
-        .set(1.);
+    let metrics = Metrics::register();
 
     println!(
         "Running le_passive_scan on adapter {} with or-pattern {:?}",
@@ -176,21 +59,7 @@ async fn main() -> bluer::Result<()> {
         if let MonitorEvent::DeviceFound(devid) = mevt {
             println!("Discovered device {:?}", devid);
             let dev = adapter.device(devid.device)?;
-            let ruuvi_frames = Arc::clone(&ruuvi_frames);
-            let last_updated_ruuvi = Arc::clone(&last_updated_ruuvi);
-            let temperature = Arc::clone(&temperature);
-            let humidity = Arc::clone(&humidity);
-            let pressure = Arc::clone(&pressure);
-            let voltage = Arc::clone(&voltage);
-            let acceleration = Arc::clone(&acceleration);
-            let signal_rssi = Arc::clone(&signal_rssi);
-            let tx_power = Arc::clone(&tx_power);
-            let seqno = Arc::clone(&seqno);
-            let pm2_5 = Arc::clone(&pm2_5);
-            let co2 = Arc::clone(&co2);
-            let voc = Arc::clone(&voc);
-            let nox = Arc::clone(&nox);
-            let calibrating = Arc::clone(&calibrating);
+            let metrics = metrics.clone();
             tokio::spawn(async move {
                 let mut events = dev.events().await.unwrap();
                 while let Some(ev) = events.next().await {
@@ -208,43 +77,53 @@ async fn main() -> bluer::Result<()> {
 
                                             match data {
                                                 RuuviData::V5(v5) => {
-                                                    ruuvi_frames
+                                                    metrics
+                                                        .ruuvi_frames
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .inc();
-                                                    temperature
+                                                    metrics
+                                                        .temperature
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v5.temperature.unwrap());
-                                                    humidity
+                                                    metrics
+                                                        .humidity
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v5.humidity.unwrap());
-                                                    pressure
+                                                    metrics
+                                                        .pressure
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v5.pressure.unwrap());
-                                                    voltage
+                                                    metrics
+                                                        .voltage
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v5.battery_voltage.unwrap() as f64);
-                                                    acceleration
+                                                    metrics
+                                                        .acceleration
                                                         .get_metric_with_label_values(&[&addr, "X"])
                                                         .unwrap()
                                                         .set(v5.acceleration_x.unwrap() as f64);
-                                                    acceleration
+                                                    metrics
+                                                        .acceleration
                                                         .get_metric_with_label_values(&[&addr, "Y"])
                                                         .unwrap()
                                                         .set(v5.acceleration_y.unwrap() as f64);
-                                                    acceleration
+                                                    metrics
+                                                        .acceleration
                                                         .get_metric_with_label_values(&[&addr, "Z"])
                                                         .unwrap()
                                                         .set(v5.acceleration_z.unwrap() as f64);
-                                                    tx_power
+                                                    metrics
+                                                        .tx_power
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v5.tx_power.unwrap() as f64);
-                                                    seqno
+                                                    metrics
+                                                        .seqno
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(
@@ -252,45 +131,64 @@ async fn main() -> bluer::Result<()> {
                                                         );
                                                 }
                                                 RuuviData::V6(v6) => {
-                                                    ruuvi_frames
+                                                    metrics
+                                                        .ruuvi_frames
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .inc();
-                                                    temperature
+                                                    metrics
+                                                        .temperature
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v6.temperature.unwrap());
-                                                    humidity
+                                                    metrics
+                                                        .humidity
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v6.humidity.unwrap());
-                                                    pressure
+                                                    metrics
+                                                        .pressure
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v6.pressure.unwrap());
-                                                    seqno
+                                                    metrics
+                                                        .seqno
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(
                                                             v6.measurement_sequence.unwrap() as f64
                                                         );
-                                                    pm2_5
+                                                    metrics
+                                                        .pm2_5
                                                         .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v6.pm2_5.unwrap());
-                                                    co2.get_metric_with_label_values(&[&addr])
+                                                    metrics
+                                                        .co2
+                                                        .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v6.co2.unwrap() as f64);
-                                                    voc.get_metric_with_label_values(&[&addr])
+                                                    metrics
+                                                        .voc
+                                                        .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v6.voc_index.unwrap() as f64);
-                                                    nox.get_metric_with_label_values(&[&addr])
+                                                    metrics
+                                                        .nox
+                                                        .get_metric_with_label_values(&[&addr])
                                                         .unwrap()
                                                         .set(v6.nox_index.unwrap() as f64);
-                                                    // calibrating
-                                                    //     .get_metric_with_label_values(&[&addr])
-                                                    //     .unwrap()
-                                                    //     .set(v6.flags as f64);
+                                                    let calibrating =
+                                                        if (v6.flags & 0b0000_0001) != 0 {
+                                                            1.0
+                                                        } else {
+                                                            0.0
+                                                        };
+                                                    metrics
+                                                        .calibrating
+                                                        .get_metric_with_label_values(&[&addr])
+                                                        .unwrap()
+                                                        .set(calibrating);
                                                 }
                                                 _ => {}
                                             }
@@ -300,7 +198,8 @@ async fn main() -> bluer::Result<()> {
                                                 .unwrap()
                                                 .as_secs()
                                                 as f64;
-                                            last_updated_ruuvi
+                                            metrics
+                                                .last_updated_ruuvi
                                                 .get_metric_with_label_values(&[&addr])
                                                 .unwrap()
                                                 .set(timestamp);
@@ -312,7 +211,8 @@ async fn main() -> bluer::Result<()> {
                             }
                         }
                         DeviceEvent::PropertyChanged(Rssi(rssi)) => {
-                            signal_rssi
+                            metrics
+                                .signal_rssi
                                 .get_metric_with_label_values(&[&addr])
                                 .unwrap()
                                 .set(rssi as f64);
