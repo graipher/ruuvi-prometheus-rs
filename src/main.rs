@@ -98,7 +98,7 @@ async fn main() -> bluer::Result<()> {
                 if let ManufacturerData(data) = property {
                     match data.get(&0x0499) {
                         Some(value) => handle_manufacturer_data(&metrics, &addr, value),
-                        None => eprintln!("No data"),
+                        None => eprintln!("No data found"),
                     }
                 }
             }
@@ -118,7 +118,7 @@ async fn main() -> bluer::Result<()> {
                             DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
                                 match data.get(&0x0499) {
                                     Some(value) => handle_manufacturer_data(&metrics, &addr, value),
-                                    None => eprintln!("No value found"),
+                                    None => eprintln!("No data found"),
                                 }
                             }
                             DeviceEvent::PropertyChanged(Rssi(rssi)) => {
