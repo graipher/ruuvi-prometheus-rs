@@ -87,22 +87,24 @@ async fn main() -> bluer::Result<()> {
                     #[cfg(debug_assertions)]
                     println!("{:?} RSSI: {}", dev, rssi);
                 }
+
+                let mut active = active_devices.lock().await;
+                if !active.insert(addr.clone()) {
+                    continue;
+                }
+                drop(active);
+
                 #[cfg(debug_assertions)]
                 println!("All properties: {:?}", dev.all_properties().await.unwrap());
-
                 for property in dev.all_properties().await.unwrap() {
                     if let ManufacturerData(data) = property {
                         match data.get(&0x0499) {
                             Some(value) => handle_manufacturer_data(&metrics, &addr, value),
                             None => eprintln!("No data found"),
                         }
+                        break;
                     }
                 }
-                let mut active = active_devices.lock().await;
-                if !active.insert(addr.clone()) {
-                    continue;
-                }
-                drop(active);
 
                 let metrics = metrics.clone();
                 let active_devices = active_devices.clone();
@@ -154,7 +156,7 @@ fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
 
             match data {
                 RuuviData::V5(v5) => {
-                    metrics.inc_ruuvi_frames(addr);
+                    metrics.inc_ruuvi_frames(addr, "5");
                     let temperature = v5.temperature.unwrap();
                     let humidity = v5.humidity.unwrap() / 100.0;
                     metrics.set_temperature(addr, temperature);
@@ -170,10 +172,9 @@ fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
                     metrics.set_tx_power(addr, v5.tx_power.unwrap() as f64);
                     metrics.set_seqno(addr, v5.measurement_sequence.unwrap() as f64);
                     metrics.set_move_count(addr, v5.movement_counter.unwrap() as f64);
-                    metrics.set_format(addr, 5 as f64);
                 }
                 RuuviData::V6(v6) => {
-                    metrics.inc_ruuvi_frames(addr);
+                    metrics.inc_ruuvi_frames(addr, "6");
                     let temperature = v6.temperature.unwrap();
                     let humidity = v6.humidity.unwrap() / 100.0;
                     metrics.set_temperature(addr, temperature);
@@ -193,10 +194,9 @@ fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
                         0.0
                     };
                     metrics.set_calibrating(addr, calibrating);
-                    metrics.set_format(addr, 6 as f64);
                 }
                 RuuviData::E1(e1) => {
-                    metrics.inc_ruuvi_frames(addr);
+                    metrics.inc_ruuvi_frames(addr, "E1");
                     let temperature = e1.temperature.unwrap();
                     let humidity = e1.humidity.unwrap() / 100.0;
                     metrics.set_temperature(addr, temperature);
@@ -219,7 +219,6 @@ fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
                         0.0
                     };
                     metrics.set_calibrating(addr, calibrating);
-                    metrics.set_format(addr, 225 as f64);
                 }
             }
 

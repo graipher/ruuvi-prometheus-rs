@@ -6,6 +6,7 @@ pub struct Metrics;
 impl Metrics {
     const LABEL_DEVICE: &'static str = "device";
     const LABEL_AXIS: &'static str = "axis";
+    const LABEL_FORMAT: &'static str = "format";
 
     pub fn register() -> Self {
         Self::describe_metrics();
@@ -13,9 +14,10 @@ impl Metrics {
         Self
     }
 
-    pub fn inc_ruuvi_frames(&self, device: &str) {
+    pub fn inc_ruuvi_frames(&self, device: &str, format: &str) {
         let device_label = device.to_owned();
-        counter!("ruuvi_frames_total", Self::LABEL_DEVICE => device_label).increment(1);
+        let format_label = format.to_owned();
+        counter!("ruuvi_frames_total", Self::LABEL_DEVICE => device_label, Self::LABEL_FORMAT => format_label).increment(1);
     }
 
     pub fn set_temperature(&self, device: &str, value: f64) {
@@ -119,11 +121,6 @@ impl Metrics {
         gauge!("ruuvi_movecount_total", Self::LABEL_DEVICE => device_label).set(value);
     }
 
-    pub fn set_format(&self, device: &str, value: f64) {
-        let device_label = device.to_owned();
-        gauge!("ruuvi_format", Self::LABEL_DEVICE => device_label).set(value);
-    }
-
     fn describe_metrics() {
         describe_counter!("ruuvi_frames_total", "Total Ruuvi frames received");
         describe_gauge!("ruuvi_temperature_celsius", "Ruuvi tag sensor temperature");
@@ -152,10 +149,6 @@ impl Metrics {
         describe_gauge!("ruuvi_last_updated", "Last update of RuuviTag");
         describe_gauge!("rust_info", "Info about the Rust version");
         describe_gauge!("ruuvi_movecount_total", "Ruuvi movement counter");
-        describe_gauge!(
-            "ruuvi_format",
-            "Ruuvi frame format version (e.g. 3, 5, 6 or 225 (for E1))"
-        );
     }
 }
 
