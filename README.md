@@ -30,7 +30,22 @@ Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com
 
 # How to run
 
-Since building a docker image with the correct bluetooth dependencies installed is tricky, so far only running directly on the host is supported:
+## Experimental bluetooth features
+
+```shell
+sudo nano /usr/lib/systemd/system/bluetooth.service
+...
+sudo systemctl daemon-reload
+sudo service bluetooth restart
+```
+
+```
+ExecStart=/usr/libexec/bluetooth/bluetoothd --experimental
+```
+
+## Build & Run
+
+Since building a docker image with the correct bluetooth dependencies installed is tricky, so far only running directly on the host is supported.
 
 ```shell
 cargo build --release
