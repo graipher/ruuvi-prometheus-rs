@@ -99,6 +99,16 @@ impl Metrics {
         gauge!("ruuvi_last_updated", Self::LABEL_DEVICE => device_label).set(value);
     }
 
+    pub fn set_move_count(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_movecount_total", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_format(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_format", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
     fn describe_metrics() {
         describe_counter!("ruuvi_frames_total", "Total Ruuvi frames received");
         describe_gauge!("ruuvi_temperature_celsius", "Ruuvi tag sensor temperature");
@@ -123,6 +133,11 @@ impl Metrics {
         describe_gauge!("ruuvi_air_calibrating", "Ruuvi calibrating");
         describe_gauge!("ruuvi_last_updated", "Last update of RuuviTag");
         describe_gauge!("rust_info", "Info about the Rust version");
+        describe_gauge!("ruuvi_movecount_total", "Ruuvi movement counter");
+        describe_gauge!(
+            "ruuvi_format",
+            "Ruuvi frame format version (e.g. 3, 5 or 6)"
+        );
     }
 }
 

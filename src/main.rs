@@ -85,15 +85,23 @@ async fn main() -> bluer::Result<()> {
                 println!("Discovered device {:?}", devid);
             }
             let dev = adapter.device(devid.device)?;
-            #[cfg(debug_assertions)]
-            {
-                println!(
-                    "Advertising data: {:?}",
-                    dev.all_properties().await.unwrap()
-                );
-            }
             let addr = format_device_address(&dev.address());
+            if let Some(rssi) = dev.rssi().await? {
+                metrics.set_signal_rssi(&addr, rssi as f64);
+                #[cfg(debug_assertions)]
+                println!("{:?} RSSI: {}", dev, rssi);
+            }
+            #[cfg(debug_assertions)]
+            println!("All properties: {:?}", dev.all_properties().await.unwrap());
 
+            for property in dev.all_properties().await.unwrap() {
+                if let ManufacturerData(data) = property {
+                    match data.get(&0x0499) {
+                        Some(value) => handle_manufacturer_data(&metrics, &addr, value),
+                        None => eprintln!("No data"),
+                    }
+                }
+            }
             let mut active = active_devices.lock().await;
             if !active.insert(addr.clone()) {
                 continue;
@@ -109,127 +117,16 @@ async fn main() -> bluer::Result<()> {
                         match ev {
                             DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
                                 match data.get(&0x0499) {
-                                    Some(value) => {
-                                        let hex: String =
-                                            value.iter().map(|b| format!("{:02x}", b)).collect();
-                                        match ruuvi_decoders::decode(hex.as_str()) {
-                                            Ok(data) => {
-                                                #[cfg(debug_assertions)]
-                                                {
-                                                    println!("{:?}", data);
-                                                }
-                                                match data {
-                                                    RuuviData::V5(v5) => {
-                                                        metrics.inc_ruuvi_frames(&addr);
-                                                        let temperature = v5.temperature.unwrap();
-                                                        let humidity = v5.humidity.unwrap() / 100.0;
-                                                        metrics.set_temperature(&addr, temperature);
-                                                        metrics.set_humidity(&addr, humidity);
-                                                        if let Some(dew_point) =
-                                                            dew_point_celsius(temperature, humidity)
-                                                        {
-                                                            metrics.set_dew_point(&addr, dew_point);
-                                                        }
-                                                        metrics.set_pressure(
-                                                            &addr,
-                                                            v5.pressure.unwrap() / 100.0,
-                                                        );
-                                                        metrics.set_voltage(
-                                                            &addr,
-                                                            v5.battery_voltage.unwrap() as f64
-                                                                / 1000.0,
-                                                        );
-                                                        metrics.set_acceleration(
-                                                            &addr,
-                                                            "X",
-                                                            v5.acceleration_x.unwrap() as f64
-                                                                / 1000.0,
-                                                        );
-                                                        metrics.set_acceleration(
-                                                            &addr,
-                                                            "Y",
-                                                            v5.acceleration_y.unwrap() as f64
-                                                                / 1000.0,
-                                                        );
-                                                        metrics.set_acceleration(
-                                                            &addr,
-                                                            "Z",
-                                                            v5.acceleration_z.unwrap() as f64
-                                                                / 1000.0,
-                                                        );
-                                                        metrics.set_tx_power(
-                                                            &addr,
-                                                            v5.tx_power.unwrap() as f64,
-                                                        );
-                                                        metrics.set_seqno(
-                                                            &addr,
-                                                            v5.measurement_sequence.unwrap() as f64,
-                                                        );
-                                                    }
-                                                    RuuviData::V6(v6) => {
-                                                        metrics.inc_ruuvi_frames(&addr);
-                                                        let temperature = v6.temperature.unwrap();
-                                                        let humidity = v6.humidity.unwrap() / 100.0;
-                                                        metrics.set_temperature(&addr, temperature);
-                                                        metrics.set_humidity(&addr, humidity);
-                                                        if let Some(dew_point) =
-                                                            dew_point_celsius(temperature, humidity)
-                                                        {
-                                                            metrics.set_dew_point(&addr, dew_point);
-                                                        }
-                                                        metrics.set_pressure(
-                                                            &addr,
-                                                            v6.pressure.unwrap(),
-                                                        );
-                                                        metrics.set_seqno(
-                                                            &addr,
-                                                            v6.measurement_sequence.unwrap() as f64,
-                                                        );
-                                                        metrics.set_pm2_5(&addr, v6.pm2_5.unwrap());
-                                                        metrics
-                                                            .set_co2(&addr, v6.co2.unwrap() as f64);
-                                                        metrics.set_voc(
-                                                            &addr,
-                                                            v6.voc_index.unwrap() as f64,
-                                                        );
-                                                        metrics.set_nox(
-                                                            &addr,
-                                                            v6.nox_index.unwrap() as f64,
-                                                        );
-                                                        let calibrating =
-                                                            if (v6.flags & 0b0000_0001) != 0 {
-                                                                1.0
-                                                            } else {
-                                                                0.0
-                                                            };
-                                                        metrics.set_calibrating(&addr, calibrating);
-                                                    }
-                                                    _ => {}
-                                                }
-
-                                                let timestamp = SystemTime::now()
-                                                    .duration_since(SystemTime::UNIX_EPOCH)
-                                                    .unwrap()
-                                                    .as_secs()
-                                                    as f64;
-                                                metrics.set_last_updated(&addr, timestamp);
-                                            }
-                                            Err(err) => println!("Error decoding data: {}", err),
-                                        };
-                                    }
+                                    Some(value) => handle_manufacturer_data(&metrics, &addr, value),
                                     None => eprintln!("No value found"),
                                 }
                             }
                             DeviceEvent::PropertyChanged(Rssi(rssi)) => {
                                 metrics.set_signal_rssi(&addr, rssi as f64);
                                 #[cfg(debug_assertions)]
-                                {
-                                    println!("{:?} RSSI: {}", dev, rssi);
-                                }
+                                println!("{:?} RSSI: {}", dev, rssi);
                             }
-                            _ => {
-                                eprintln!("Unknown event: {:?}", ev)
-                            }
+                            _ => eprintln!("Unknown event: {:?}", ev),
                         }
                     }
                     Ok(())
@@ -246,6 +143,76 @@ async fn main() -> bluer::Result<()> {
     }
 
     Ok(())
+}
+
+fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
+    let hex: String = value.iter().map(|b| format!("{:02x}", b)).collect();
+    match ruuvi_decoders::decode(hex.as_str()) {
+        Ok(data) => {
+            #[cfg(debug_assertions)]
+            {
+                println!("{:?}", data);
+            }
+
+            let mut updated = false;
+            match data {
+                RuuviData::V5(v5) => {
+                    metrics.inc_ruuvi_frames(addr);
+                    let temperature = v5.temperature.unwrap();
+                    let humidity = v5.humidity.unwrap() / 100.0;
+                    metrics.set_temperature(addr, temperature);
+                    metrics.set_humidity(addr, humidity);
+                    if let Some(dew_point) = dew_point_celsius(temperature, humidity) {
+                        metrics.set_dew_point(addr, dew_point);
+                    }
+                    metrics.set_pressure(addr, v5.pressure.unwrap() / 100.0);
+                    metrics.set_voltage(addr, v5.battery_voltage.unwrap() as f64 / 1000.0);
+                    metrics.set_acceleration(addr, "X", v5.acceleration_x.unwrap() as f64 / 1000.0);
+                    metrics.set_acceleration(addr, "Y", v5.acceleration_y.unwrap() as f64 / 1000.0);
+                    metrics.set_acceleration(addr, "Z", v5.acceleration_z.unwrap() as f64 / 1000.0);
+                    metrics.set_tx_power(addr, v5.tx_power.unwrap() as f64);
+                    metrics.set_seqno(addr, v5.measurement_sequence.unwrap() as f64);
+                    metrics.set_move_count(addr, v5.movement_counter.unwrap() as f64);
+                    metrics.set_format(addr, 5 as f64);
+                    updated = true;
+                }
+                RuuviData::V6(v6) => {
+                    metrics.inc_ruuvi_frames(addr);
+                    let temperature = v6.temperature.unwrap();
+                    let humidity = v6.humidity.unwrap() / 100.0;
+                    metrics.set_temperature(addr, temperature);
+                    metrics.set_humidity(addr, humidity);
+                    if let Some(dew_point) = dew_point_celsius(temperature, humidity) {
+                        metrics.set_dew_point(addr, dew_point);
+                    }
+                    metrics.set_pressure(addr, v6.pressure.unwrap());
+                    metrics.set_seqno(addr, v6.measurement_sequence.unwrap() as f64);
+                    metrics.set_pm2_5(addr, v6.pm2_5.unwrap());
+                    metrics.set_co2(addr, v6.co2.unwrap() as f64);
+                    metrics.set_voc(addr, v6.voc_index.unwrap() as f64);
+                    metrics.set_nox(addr, v6.nox_index.unwrap() as f64);
+                    let calibrating = if (v6.flags & 0b0000_0001) != 0 {
+                        1.0
+                    } else {
+                        0.0
+                    };
+                    metrics.set_calibrating(addr, calibrating);
+                    metrics.set_format(addr, 6 as f64);
+                    updated = true;
+                }
+                _ => eprintln!("Unhandled protocol format: {:?}", data),
+            }
+
+            if updated {
+                let timestamp = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs() as f64;
+                metrics.set_last_updated(addr, timestamp);
+            }
+        }
+        Err(err) => println!("Error decoding data: {}", err),
+    };
 }
 
 const DEW_POINT_B: f64 = 17.368;
