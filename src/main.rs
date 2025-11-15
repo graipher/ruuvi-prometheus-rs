@@ -138,13 +138,6 @@ async fn main() -> bluer::Result<()> {
                     active_devices.lock().await.remove(&addr);
                 });
             }
-            MonitorEvent::DeviceLost(devid) => {
-                let dev = adapter.device(devid.device)?;
-                let addr = format_device_address(&dev.address());
-                #[cfg(debug_assertions)]
-                println!("Lost device {:?}", devid);
-                active_devices.lock().await.remove(&addr);
-            }
             _ => {}
         }
     }
