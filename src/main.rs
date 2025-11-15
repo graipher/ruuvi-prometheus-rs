@@ -150,9 +150,7 @@ fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
     match ruuvi_decoders::decode(hex.as_str()) {
         Ok(data) => {
             #[cfg(debug_assertions)]
-            {
-                println!("{:?}", data);
-            }
+            println!("{:?}", data);
 
             let mut updated = false;
             match data {

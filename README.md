@@ -1,18 +1,35 @@
 # Ruuvi Exporter
 
-Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2) of the protocol so far.
+Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-5-rawv2) and [v6](https://docs.ruuvi.com/communication/bluetooth-advertisements/data-format-6) of the Ruuvi protocol so far.
 
 ## Exposed metrics
 
-Output temperature (in °C), humidity (in %RH), dew point (in °C), pressure (in hPa), acceleration (in g), battery voltage (in mV), signal strength (in dBm), last updated and number of messages received, per Ruuvi tag.
+| Metric                        | v5 | v6 |
+|-------------------------------|----|----|
+| Temperature (°C)              | ✔️ | ✔️ |
+| Humidity (%RH)                | ✔️ | ✔️ |
+| Dew Point (°C)                | ✔️ | ✔️ |
+| Pressure (hPa)                | ✔️ | ✔️ |
+| Acceleration (g)              | ✔️ | ✗ |
+| Battery Voltage (mV)          | ✔️ | ✗ |
+| Move Counter                  | ✔️ | ✗ |
+| PM 2.5 (ug/m³)                | ✗ | ✔️ |
+| CO_2 (ppm)                    | ✗ | ✔️ |
+| VOC index                     | ✗ | ✔️ |
+| NO_x index                    | ✗ | ✔️ |
+| Air quality calibrating       | ✗ | ✔️ |
+| Signal Strength, rssi (dBm)   | ✔️ | ✔️ |
+| Transmitting Strength (dBm)   | ✔️ | ✔️ |
+| Last Updated                  | ✔️ | ✔️ |
+| Format                        | ✔️ | ✔️ |
+| Messages Received             | ✔️ | ✔️ |
+
 
 # How to run
 
-Build and run with Docker:
+Since building a docker image with the correct bluetooth dependencies installed is tricky, so far only running directly on the host is supported:
 
-```sh
-docker build -t ruuvi-prometheus-rs .
-docker run -it --rm \
-    -e PORT=9185 \
-    ruuvi-prometheus-rs
+```shell
+cargo build --release
+PORT=9185 ./target/release/ruuvi-prometheus-rs
 ```
