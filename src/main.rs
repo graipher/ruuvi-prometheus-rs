@@ -6,8 +6,9 @@ use std::time::SystemTime;
 
 use bluer::DeviceEvent;
 use bluer::DeviceProperty::{ManufacturerData, Rssi};
-use bluer::monitor::data_type::MANUFACTURER_SPECIFIC_DATA;
-use bluer::monitor::{Monitor, MonitorEvent, Pattern, RssiSamplingPeriod};
+use bluer::monitor::{
+    Monitor, MonitorEvent, Pattern, RssiSamplingPeriod, data_type::MANUFACTURER_SPECIFIC_DATA,
+};
 use futures::StreamExt;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_process::Collector as ProcessCollector;
@@ -40,7 +41,6 @@ async fn main() -> bluer::Result<()> {
         }
     });
 
-    let adapter_name = Some("hci0".to_string());
     let data_type: u8 = MANUFACTURER_SPECIFIC_DATA;
     let start_position: u8 = 0x00;
     let content: Vec<u8> = vec![0x99, 0x04];
@@ -50,10 +50,7 @@ async fn main() -> bluer::Result<()> {
         content,
     };
     let session = bluer::Session::new().await?;
-    let adapter = match adapter_name {
-        Some(name) => session.adapter(&name)?,
-        None => session.default_adapter().await?,
-    };
+    let adapter = session.default_adapter().await?;
 
     let metrics = Metrics::register();
     let active_devices = Arc::new(Mutex::new(HashSet::new()));
@@ -79,66 +76,76 @@ async fn main() -> bluer::Result<()> {
         .await?;
 
     while let Some(mevt) = &monitor_handle.next().await {
-        if let MonitorEvent::DeviceFound(devid) = mevt {
-            #[cfg(debug_assertions)]
-            {
-                println!("Discovered device {:?}", devid);
-            }
-            let dev = adapter.device(devid.device)?;
-            let addr = format_device_address(&dev.address());
-            if let Some(rssi) = dev.rssi().await? {
-                metrics.set_signal_rssi(&addr, rssi as f64);
+        match mevt {
+            MonitorEvent::DeviceFound(devid) => {
                 #[cfg(debug_assertions)]
-                println!("{:?} RSSI: {}", dev, rssi);
-            }
-            #[cfg(debug_assertions)]
-            println!("All properties: {:?}", dev.all_properties().await.unwrap());
-
-            for property in dev.all_properties().await.unwrap() {
-                if let ManufacturerData(data) = property {
-                    match data.get(&0x0499) {
-                        Some(value) => handle_manufacturer_data(&metrics, &addr, value),
-                        None => eprintln!("No data found"),
-                    }
+                println!("Discovered device {:?}", devid);
+                let dev = adapter.device(devid.device)?;
+                let addr = format_device_address(&dev.address());
+                if let Some(rssi) = dev.rssi().await? {
+                    metrics.set_signal_rssi(&addr, rssi as f64);
+                    #[cfg(debug_assertions)]
+                    println!("{:?} RSSI: {}", dev, rssi);
                 }
-            }
-            let mut active = active_devices.lock().await;
-            if !active.insert(addr.clone()) {
-                continue;
-            }
-            drop(active);
+                #[cfg(debug_assertions)]
+                println!("All properties: {:?}", dev.all_properties().await.unwrap());
 
-            let metrics = metrics.clone();
-            let active_devices = active_devices.clone();
-            tokio::spawn(async move {
-                let result: bluer::Result<()> = async {
-                    let mut events = dev.events().await?;
-                    while let Some(ev) = events.next().await {
-                        match ev {
-                            DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
-                                match data.get(&0x0499) {
-                                    Some(value) => handle_manufacturer_data(&metrics, &addr, value),
-                                    None => eprintln!("No data found"),
-                                }
-                            }
-                            DeviceEvent::PropertyChanged(Rssi(rssi)) => {
-                                metrics.set_signal_rssi(&addr, rssi as f64);
-                                #[cfg(debug_assertions)]
-                                println!("{:?} RSSI: {}", dev, rssi);
-                            }
-                            _ => eprintln!("Unknown event: {:?}", ev),
+                for property in dev.all_properties().await.unwrap() {
+                    if let ManufacturerData(data) = property {
+                        match data.get(&0x0499) {
+                            Some(value) => handle_manufacturer_data(&metrics, &addr, value),
+                            None => eprintln!("No data found"),
                         }
                     }
-                    Ok(())
                 }
-                .await;
-
-                if let Err(err) = result {
-                    eprintln!("Error processing device {}: {}", addr, err);
+                let mut active = active_devices.lock().await;
+                if !active.insert(addr.clone()) {
+                    continue;
                 }
+                drop(active);
 
+                let metrics = metrics.clone();
+                let active_devices = active_devices.clone();
+                tokio::spawn(async move {
+                    let result: bluer::Result<()> = async {
+                        let mut events = dev.events().await?;
+                        while let Some(ev) = events.next().await {
+                            match ev {
+                                DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
+                                    match data.get(&0x0499) {
+                                        Some(value) => {
+                                            handle_manufacturer_data(&metrics, &addr, value)
+                                        }
+                                        None => eprintln!("No data found"),
+                                    }
+                                }
+                                DeviceEvent::PropertyChanged(Rssi(rssi)) => {
+                                    metrics.set_signal_rssi(&addr, rssi as f64);
+                                    #[cfg(debug_assertions)]
+                                    println!("{:?} RSSI: {}", dev, rssi);
+                                }
+                                _ => eprintln!("Unknown event: {:?}", ev),
+                            }
+                        }
+                        Ok(())
+                    }
+                    .await;
+
+                    if let Err(err) = result {
+                        eprintln!("Error processing device {}: {}", addr, err);
+                    }
+
+                    active_devices.lock().await.remove(&addr);
+                });
+            }
+            MonitorEvent::DeviceLost(devid) => {
+                let dev = adapter.device(devid.device)?;
+                let addr = format_device_address(&dev.address());
+                #[cfg(debug_assertions)]
+                println!("Lost device {:?}", devid);
                 active_devices.lock().await.remove(&addr);
-            });
+            }
+            _ => {}
         }
     }
 
@@ -152,7 +159,6 @@ fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
             #[cfg(debug_assertions)]
             println!("{:?}", data);
 
-            let mut updated = false;
             match data {
                 RuuviData::V5(v5) => {
                     metrics.inc_ruuvi_frames(addr);
@@ -172,7 +178,6 @@ fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
                     metrics.set_seqno(addr, v5.measurement_sequence.unwrap() as f64);
                     metrics.set_move_count(addr, v5.movement_counter.unwrap() as f64);
                     metrics.set_format(addr, 5 as f64);
-                    updated = true;
                 }
                 RuuviData::V6(v6) => {
                     metrics.inc_ruuvi_frames(addr);
@@ -196,18 +201,40 @@ fn handle_manufacturer_data(metrics: &Metrics, addr: &str, value: &[u8]) {
                     };
                     metrics.set_calibrating(addr, calibrating);
                     metrics.set_format(addr, 6 as f64);
-                    updated = true;
                 }
-                _ => eprintln!("Unhandled protocol format: {:?}", data),
+                RuuviData::E1(e1) => {
+                    metrics.inc_ruuvi_frames(addr);
+                    let temperature = e1.temperature.unwrap();
+                    let humidity = e1.humidity.unwrap() / 100.0;
+                    metrics.set_temperature(addr, temperature);
+                    metrics.set_humidity(addr, humidity);
+                    if let Some(dew_point) = dew_point_celsius(temperature, humidity) {
+                        metrics.set_dew_point(addr, dew_point);
+                    }
+                    metrics.set_pressure(addr, e1.pressure.unwrap());
+                    metrics.set_seqno(addr, e1.measurement_sequence.unwrap() as f64);
+                    metrics.set_pm1_0(addr, e1.pm1_0.unwrap());
+                    metrics.set_pm2_5(addr, e1.pm2_5.unwrap());
+                    metrics.set_pm4_0(addr, e1.pm4_0.unwrap());
+                    metrics.set_pm10_0(addr, e1.pm10_0.unwrap());
+                    metrics.set_co2(addr, e1.co2.unwrap() as f64);
+                    metrics.set_voc(addr, e1.voc_index.unwrap() as f64);
+                    metrics.set_nox(addr, e1.nox_index.unwrap() as f64);
+                    let calibrating = if (e1.flags & 0b0000_0001) != 0 {
+                        1.0
+                    } else {
+                        0.0
+                    };
+                    metrics.set_calibrating(addr, calibrating);
+                    metrics.set_format(addr, 225 as f64);
+                }
             }
 
-            if updated {
-                let timestamp = SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs() as f64;
-                metrics.set_last_updated(addr, timestamp);
-            }
+            let timestamp = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as f64;
+            metrics.set_last_updated(addr, timestamp);
         }
         Err(err) => println!("Error decoding data: {}", err),
     };

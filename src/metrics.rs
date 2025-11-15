@@ -69,9 +69,24 @@ impl Metrics {
         gauge!("ruuvi_seqno_current", Self::LABEL_DEVICE => device_label).set(value);
     }
 
+    pub fn set_pm1_0(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_pm1_0_ug_m3", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
     pub fn set_pm2_5(&self, device: &str, value: f64) {
         let device_label = device.to_owned();
         gauge!("ruuvi_pm2_5_ug_m3", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_pm4_0(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_pm4_0_ug_m3", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
+    pub fn set_pm10_0(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_pm10_0_ug_m3", Self::LABEL_DEVICE => device_label).set(value);
     }
 
     pub fn set_co2(&self, device: &str, value: f64) {
@@ -126,7 +141,10 @@ impl Metrics {
         describe_gauge!("ruuvi_rssi_dbm", "Ruuvi tag received signal strength RSSI");
         describe_gauge!("ruuvi_txpower_dbm", "Ruuvi transmit power in dBm");
         describe_gauge!("ruuvi_seqno_current", "Ruuvi frame sequence number");
+        describe_gauge!("ruuvi_pm1_0_ug_m3", "Ruuvi PM1.0 concentration in ug/m3");
         describe_gauge!("ruuvi_pm2_5_ug_m3", "Ruuvi PM2.5 concentration in ug/m3");
+        describe_gauge!("ruuvi_pm4_0_ug_m3", "Ruuvi PM4.0 concentration in ug/m3");
+        describe_gauge!("ruuvi_pm10_0_ug_m3", "Ruuvi PM10.0 concentration in ug/m3");
         describe_gauge!("ruuvi_co2_ppm", "Ruuvi CO2 concentration in ppm");
         describe_gauge!("ruuvi_voc_index", "Ruuvi VOC index");
         describe_gauge!("ruuvi_nox_index", "Ruuvi NOx index");
@@ -136,7 +154,7 @@ impl Metrics {
         describe_gauge!("ruuvi_movecount_total", "Ruuvi movement counter");
         describe_gauge!(
             "ruuvi_format",
-            "Ruuvi frame format version (e.g. 3, 5 or 6)"
+            "Ruuvi frame format version (e.g. 3, 5, 6 or 225 (for E1))"
         );
     }
 }
