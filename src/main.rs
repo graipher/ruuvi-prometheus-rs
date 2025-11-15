@@ -80,12 +80,18 @@ async fn main() -> bluer::Result<()> {
 
     while let Some(mevt) = &monitor_handle.next().await {
         if let MonitorEvent::DeviceFound(devid) = mevt {
-            println!("Discovered device {:?}", devid);
+            #[cfg(debug_assertions)]
+            {
+                println!("Discovered device {:?}", devid);
+            }
             let dev = adapter.device(devid.device)?;
-            println!(
-                "Advertising data: {:?}",
-                dev.all_properties().await.unwrap()
-            );
+            #[cfg(debug_assertions)]
+            {
+                println!(
+                    "Advertising data: {:?}",
+                    dev.all_properties().await.unwrap()
+                );
+            }
             let addr = format_device_address(&dev.address());
 
             let mut active = active_devices.lock().await;
@@ -108,8 +114,10 @@ async fn main() -> bluer::Result<()> {
                                             value.iter().map(|b| format!("{:02x}", b)).collect();
                                         match ruuvi_decoders::decode(hex.as_str()) {
                                             Ok(data) => {
-                                                println!("{:?}", data);
-
+                                                #[cfg(debug_assertions)]
+                                                {
+                                                    println!("{:?}", data);
+                                                }
                                                 match data {
                                                     RuuviData::V5(v5) => {
                                                         metrics.inc_ruuvi_frames(&addr);
@@ -171,7 +179,7 @@ async fn main() -> bluer::Result<()> {
                                                         }
                                                         metrics.set_pressure(
                                                             &addr,
-                                                            v6.pressure.unwrap() / 100.0,
+                                                            v6.pressure.unwrap(),
                                                         );
                                                         metrics.set_seqno(
                                                             &addr,
@@ -209,15 +217,18 @@ async fn main() -> bluer::Result<()> {
                                             Err(err) => println!("Error decoding data: {}", err),
                                         };
                                     }
-                                    None => println!("No value found"),
+                                    None => eprintln!("No value found"),
                                 }
                             }
                             DeviceEvent::PropertyChanged(Rssi(rssi)) => {
                                 metrics.set_signal_rssi(&addr, rssi as f64);
-                                println!("{:?} RSSI: {}", dev, rssi);
+                                #[cfg(debug_assertions)]
+                                {
+                                    println!("{:?} RSSI: {}", dev, rssi);
+                                }
                             }
                             _ => {
-                                println!("Unknown event: {:?}", ev)
+                                eprintln!("Unknown event: {:?}", ev)
                             }
                         }
                     }
