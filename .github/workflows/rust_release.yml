@@ -2,6 +2,8 @@ name: Release
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 on:
   push:
@@ -35,6 +37,7 @@ jobs:
       - run: rustup update stable
       - run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - uses: taiki-e/upload-rust-binary-action@v1
+        id: upload
         with:
           # (required) Comma-separated list of binary names (non-extension portion of filename) to build and upload.
           # Note that glob pattern is not supported yet.
@@ -55,3 +58,8 @@ jobs:
           zip: none
           # (required) GitHub token for uploading assets to GitHub Releases.
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Attest release artifact
+        if: ${{ steps.upload.outputs.tar != '' }}
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ format('{0}/{1}', github.workspace, steps.upload.outputs.tar) }}
