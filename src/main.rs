@@ -9,9 +9,11 @@ use bluer::DeviceProperty::{ManufacturerData, Rssi};
 use bluer::monitor::{
     Monitor, MonitorEvent, Pattern, RssiSamplingPeriod, data_type::MANUFACTURER_SPECIFIC_DATA,
 };
+use duration_string::DurationString;
 use futures::StreamExt;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use metrics_process::Collector as ProcessCollector;
+use metrics_util::MetricKindMask;
 use ruuvi_decoders::{self, RuuviData};
 use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
@@ -24,8 +26,14 @@ async fn main() -> bluer::Result<()> {
     let port = env::var("PORT").unwrap_or("9185".to_string());
     let binding: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
     println!("Listening on {}", binding);
+    let timeout: Duration = env::var("IDLE_TIMEOUT")
+        .unwrap_or("60s".to_string())
+        .parse::<DurationString>()
+        .unwrap()
+        .into();
     PrometheusBuilder::new()
         .with_http_listener(binding)
+        .idle_timeout(MetricKindMask::ALL, Some(timeout))
         .install()
         .expect("failed to install Prometheus exporter");
 
@@ -50,7 +58,11 @@ async fn main() -> bluer::Result<()> {
         content,
     };
     let session = bluer::Session::new().await?;
-    let adapter = session.default_adapter().await?;
+    let adapter_name = env::var("BLUETOOTH_DEVICE").unwrap_or("hci0".to_string());
+    let adapter = match session.adapter(&adapter_name) {
+        Ok(adapter) => adapter,
+        Err(_) => session.default_adapter().await?,
+    };
 
     let metrics = Metrics::register();
     let active_devices = Arc::new(Mutex::new(HashSet::new()));

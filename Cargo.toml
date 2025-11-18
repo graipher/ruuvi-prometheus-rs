@@ -1,6 +1,6 @@
 [package]
 name = "ruuvi-prometheus-rs"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 
 [profile.release]
@@ -22,3 +22,5 @@ futures = "0.3.31"
 metrics-process = { version = "2.4.2", features = ["use-gauge-on-cpu-seconds-total"] }
 metrics = "0.24.2"
 metrics-exporter-prometheus = "0.17.2"
+metrics-util = "0.20.0"
+duration-string = "0.5.3"

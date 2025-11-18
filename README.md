@@ -49,5 +49,13 @@ Since building a docker image with the correct bluetooth dependencies installed 
 
 ```shell
 cargo build --release
-PORT=9185 ./target/release/ruuvi-prometheus-rs
+PORT=9185 TIMEOUT=60s ./target/release/ruuvi-prometheus-rs
 ```
+
+## Environment variables
+
+| Variable            | Description                                     | Default         |
+|---------------------|-------------------------------------------------|-----------------|
+| `PORT`              | Port to listen on for the metrics endpoint      | 9185            |
+| `IDLE_TIMEOUT`      | Idle timeout for metrics                        | 60s             |
+| `BLUETOOTH_DEVICE`  | Which bluetooth device to use (e.g. hci0)       | hci0            |
