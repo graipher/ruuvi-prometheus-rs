@@ -45,12 +45,60 @@ ExecStart=/usr/libexec/bluetooth/bluetoothd --experimental
 
 ## Build & Run
 
-Since building a docker image with the correct bluetooth dependencies installed is tricky, so far only running directly on the host is supported.
+### Bare Metal
+Build and run it directly on the desired host
 
 ```shell
 cargo build --release
 PORT=9185 TIMEOUT=60s ./target/release/ruuvi-prometheus-rs
 ```
+
+### Container Image
+The exporter can be run inside a container, but the host must have a running `bluethooth.service`
+just like for the bare metal case. Additionally, during runtime the D-Bus socket must be mounted
+into the container.
+
+```shell
+docker build -t <image-name> .
+docker run -v /run/dbus:/run/dbus:ro -p 9185:9185 ... <image-name>
+```
+Depending on your setup the `--privileged` might be needed.
+
+Similarly, it can be run inside a Kubernetes cluster
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: ruuvi-prometheus-rs
+spec:
+  imagePullSecrets:
+    - name: zamonien-pull-cred
+  containers:
+    - name: ruuvi
+      image: <image-name>
+      imagePullPolicy: IfNotPresent
+      ports:
+        - containerPort: 9185
+      volumeMounts:
+        - mountPath: "/run/dbus"
+          name: "dbus-socket"
+          readOnly: true
+  volumes:
+    - name: "dbus-socket"
+      hostPath:
+        path: "/run/dbus"
+```
+if only specific hosts have a bluetooth device, taints and tolerations must be used to ensure
+the pod is scheduled on the correct host.
+
+Theoretically we could install all of the bluetooth stack into the container and then mount the
+bluetooth device directly. However, this has two downsides
+
+- The container image will become more complex and harder to maintain
+- Only a single process can bind to the underlying hardware device, so as soon as this
+  hypothetical container runs no other service could use any bluethooth functionality
+  on that host
+
 
 ## Environment variables
 
