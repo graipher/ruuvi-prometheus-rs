@@ -62,7 +62,8 @@ into the container.
 docker build -t <image-name> .
 docker run -v /run/dbus:/run/dbus:ro -p 9185:9185 ... <image-name>
 ```
-Depending on your setup the `--privileged` might be needed.
+Depending on your setup the `--privileged` might be needed. A pre-build image
+is published with every release, and is available via `ghcr.io/graipher/ruuvi-prometheus-rs:vX.Y.Z`.
 
 Similarly, it can be run inside a Kubernetes cluster
 ```yaml
@@ -71,11 +72,9 @@ kind: Pod
 metadata:
   name: ruuvi-prometheus-rs
 spec:
-  imagePullSecrets:
-    - name: zamonien-pull-cred
   containers:
     - name: ruuvi
-      image: <image-name>
+      image: ghcr.io/graipher/ruuvi-prometheus-rs:vX.Y.Z
       imagePullPolicy: IfNotPresent
       ports:
         - containerPort: 9185
