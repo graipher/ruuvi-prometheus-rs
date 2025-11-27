@@ -88,75 +88,69 @@ async fn main() -> bluer::Result<()> {
         .await?;
 
     while let Some(mevt) = &monitor_handle.next().await {
-        match mevt {
-            MonitorEvent::DeviceFound(devid) => {
+        if let MonitorEvent::DeviceFound(devid) = mevt {
+            #[cfg(debug_assertions)]
+            println!("Discovered device {:?}", devid);
+            let dev = adapter.device(devid.device)?;
+            let addr = format_device_address(&dev.address());
+            if let Some(rssi) = dev.rssi().await? {
+                metrics.set_signal_rssi(&addr, rssi as f64);
                 #[cfg(debug_assertions)]
-                println!("Discovered device {:?}", devid);
-                let dev = adapter.device(devid.device)?;
-                let addr = format_device_address(&dev.address());
-                if let Some(rssi) = dev.rssi().await? {
-                    metrics.set_signal_rssi(&addr, rssi as f64);
-                    #[cfg(debug_assertions)]
-                    println!("{:?} RSSI: {}", dev, rssi);
-                }
-
-                let mut active = active_devices.lock().await;
-                if !active.insert(addr.clone()) {
-                    continue;
-                }
-                drop(active);
-
-                #[cfg(debug_assertions)]
-                println!("All properties: {:?}", dev.all_properties().await.unwrap());
-                for property in dev.all_properties().await.unwrap() {
-                    if let ManufacturerData(data) = property {
-                        match data.get(&0x0499) {
-                            Some(value) => handle_manufacturer_data(&metrics, &addr, value),
-                            None => eprintln!("No data found"),
-                        }
-                        break;
-                    }
-                }
-
-                let metrics = metrics.clone();
-                let active_devices = active_devices.clone();
-                tokio::spawn(async move {
-                    let result: bluer::Result<()> = async {
-                        let mut events = dev.events().await?;
-                        while let Some(ev) = events.next().await {
-                            match ev {
-                                DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
-                                    match data.get(&0x0499) {
-                                        Some(value) => {
-                                            handle_manufacturer_data(&metrics, &addr, value)
-                                        }
-                                        None => eprintln!("No data found"),
-                                    }
-                                }
-                                DeviceEvent::PropertyChanged(Rssi(rssi)) => {
-                                    metrics.set_signal_rssi(&addr, rssi as f64);
-                                    #[cfg(debug_assertions)]
-                                    println!("{:?} RSSI: {}", dev, rssi);
-                                }
-                                DeviceEvent::PropertyChanged(AdvertisingFlags(_flags)) => {
-                                    #[cfg(debug_assertions)]
-                                    println!("{:?} AdvertisingFlags: {:?}", dev, _flags);
-                                }
-                                _ => eprintln!("Unknown event: {:?}", ev),
-                            }
-                        }
-                        Ok(())
-                    }
-                    .await;
-
-                    if let Err(err) = result {
-                        eprintln!("Error processing device {}: {}", addr, err);
-                    }
-
-                    active_devices.lock().await.remove(&addr);
-                });
+                println!("{:?} RSSI: {}", dev, rssi);
             }
-            _ => {}
+
+            let mut active = active_devices.lock().await;
+            if !active.insert(addr.clone()) {
+                continue;
+            }
+            drop(active);
+
+            #[cfg(debug_assertions)]
+            println!("All properties: {:?}", dev.all_properties().await.unwrap());
+            for property in dev.all_properties().await.unwrap() {
+                if let ManufacturerData(data) = property {
+                    match data.get(&0x0499) {
+                        Some(value) => handle_manufacturer_data(&metrics, &addr, value),
+                        None => eprintln!("No data found"),
+                    }
+                    break;
+                }
+            }
+
+            let active_devices = active_devices.clone();
+            tokio::spawn(async move {
+                let result: bluer::Result<()> = async {
+                    let mut events = dev.events().await?;
+                    while let Some(ev) = events.next().await {
+                        match ev {
+                            DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
+                                match data.get(&0x0499) {
+                                    Some(value) => handle_manufacturer_data(&metrics, &addr, value),
+                                    None => eprintln!("No data found"),
+                                }
+                            }
+                            DeviceEvent::PropertyChanged(Rssi(rssi)) => {
+                                metrics.set_signal_rssi(&addr, rssi as f64);
+                                #[cfg(debug_assertions)]
+                                println!("{:?} RSSI: {}", dev, rssi);
+                            }
+                            DeviceEvent::PropertyChanged(AdvertisingFlags(_flags)) => {
+                                #[cfg(debug_assertions)]
+                                println!("{:?} AdvertisingFlags: {:?}", dev, _flags);
+                            }
+                            _ => eprintln!("Unknown event: {:?}", ev),
+                        }
+                    }
+                    Ok(())
+                }
+                .await;
+
+                if let Err(err) = result {
+                    eprintln!("Error processing device {}: {}", addr, err);
+                }
+
+                active_devices.lock().await.remove(&addr);
+            });
         }
     }
 
