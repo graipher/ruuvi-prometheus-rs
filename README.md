@@ -50,7 +50,7 @@ Build and run it directly on the desired host
 
 ```shell
 cargo build --release
-PORT=9185 TIMEOUT=60s ./target/release/ruuvi-prometheus-rs
+PORT=9185 IDLE_TIMEOUT=60s ./target/release/ruuvi-prometheus-rs
 ```
 
 ### Container Image
