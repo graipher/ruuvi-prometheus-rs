@@ -8,6 +8,8 @@ RUN cargo build --release
 
 
 FROM docker.io/library/debian:13.2-slim
+LABEL org.opencontainers.image.source=https://github.com/graipher/ruuvi-prometheus-rs
+LABEL org.opencontainers.image.licenses=MIT
 
 ARG USERNAME=ruuvi
 ARG USER_UID=1000
