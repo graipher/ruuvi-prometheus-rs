@@ -7,6 +7,7 @@ use duration_string::DurationString;
 pub struct Config {
     pub binding: SocketAddr,
     pub idle_timeout: Duration,
+    pub enable_process_collection: bool,
     pub process_collection_interval: Duration,
     pub adapter_name: String,
 }
@@ -19,6 +20,10 @@ pub fn config_from_env() -> Config {
         .parse::<DurationString>()
         .unwrap()
         .into();
+    let enable_process_collection = env::var("ENABLE_PROCESS_COLLECTION")
+        .unwrap_or("false".to_string())
+        .parse::<bool>()
+        .unwrap();
     let process_collection_interval: Duration = env::var("PROCESS_COLLECTION_INTERVAL")
         .unwrap_or("10s".to_string())
         .parse::<DurationString>()
@@ -29,6 +34,7 @@ pub fn config_from_env() -> Config {
     Config {
         binding,
         idle_timeout,
+        enable_process_collection,
         process_collection_interval,
         adapter_name,
     }

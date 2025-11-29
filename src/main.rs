@@ -9,9 +9,13 @@ use crate::metrics::{Metrics, install_prometheus, spawn_process_collector};
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> bluer::Result<()> {
     let config = config_from_env();
+
     install_prometheus(config.binding, config.idle_timeout);
     println!("Listening on {}", config.binding);
-    spawn_process_collector(config.process_collection_interval);
+
+    if config.enable_process_collection {
+        spawn_process_collector(config.process_collection_interval);
+    }
     let metrics = Metrics::register();
 
     let (adapter, monitor_handle, _monitor_manager) =
