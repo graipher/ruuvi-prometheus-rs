@@ -22,7 +22,7 @@ Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com
 | `ruuvi_nox_index`           | NO_x index                    | ✗ | ✔️ | ✔️ |
 | `ruuvi_air_calibrating`     | Air quality calibrating       | ✗ | ✔️ | ✔️ |
 | `ruuvi_rssi_dbm`            | Signal Strength, rssi (dBm)   | ✔️ | ✔️ | ✔️ |
-| `ruuvi_txpower_dbm`         | Transmitting Strength (dBm)   | ✔️ | ✔️ | ✔️ |
+| `ruuvi_txpower_dbm`         | Transmitting Strength (dBm)   | ✔️ | ✗ | ✗ |
 | `ruuvi_last_updated`        | Last Updated                  | ✔️ | ✔️ | ✔️ |
 | `ruuvi_frames_total`        | Messages Received             | ✔️ | ✔️ | ✔️ |
 
