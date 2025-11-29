@@ -6,6 +6,7 @@ COPY --parents Cargo.lock Cargo.toml src /root/app/
 WORKDIR /root/app
 RUN cargo build --release
 
+# ----
 
 FROM docker.io/library/debian:13.2-slim
 LABEL org.opencontainers.image.source=https://github.com/graipher/ruuvi-prometheus-rs
