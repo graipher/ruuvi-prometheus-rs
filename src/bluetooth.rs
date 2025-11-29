@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use crate::metrics::Metrics;
 use crate::ruuvi::handle_manufacturer_data;
 
-pub(crate) fn manufacturer_pattern() -> Pattern {
+fn manufacturer_pattern() -> Pattern {
     let data_type: u8 = MANUFACTURER_SPECIFIC_DATA;
     let start_position: u8 = 0x00;
     let content: Vec<u8> = vec![0x99, 0x04];
@@ -25,10 +25,7 @@ pub(crate) fn manufacturer_pattern() -> Pattern {
     }
 }
 
-pub(crate) async fn init_adapter(
-    session: &Session,
-    preferred: Option<&str>,
-) -> bluer::Result<Adapter> {
+async fn init_adapter(session: &Session, preferred: Option<&str>) -> bluer::Result<Adapter> {
     if let Some(name) = preferred
         && let Ok(adapter) = session.adapter(name)
     {
@@ -37,7 +34,7 @@ pub(crate) async fn init_adapter(
     session.default_adapter().await
 }
 
-pub(crate) fn format_device_address(address: &bluer::Address) -> String {
+fn format_device_address(address: &bluer::Address) -> String {
     format!(
         "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
         address.0[0], address.0[1], address.0[2], address.0[3], address.0[4], address.0[5]

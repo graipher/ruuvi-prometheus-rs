@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends libdbus-1-3
 COPY --from=builder /root/app/target/release/ruuvi-prometheus-rs /usr/bin/ruuvi-prometheus-rs
 
 ENV PORT="9185"
+ENV ENABLE_PROCESS_COLLECTION="false"
 ENV IDLE_TIMEOUT="60s"
 ENV BLUETOOTH_DEVICE="hci0"
 
