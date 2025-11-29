@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use bluer::DeviceEvent;
+use bluer::DeviceEvent::PropertyChanged;
 use bluer::DeviceProperty::{AdvertisingFlags, ManufacturerData, Rssi};
 use bluer::monitor::{
     Monitor, MonitorEvent, Pattern, RssiSamplingPeriod, data_type::MANUFACTURER_SPECIFIC_DATA,
@@ -123,18 +123,16 @@ async fn main() -> bluer::Result<()> {
                     let mut events = dev.events().await?;
                     while let Some(ev) = events.next().await {
                         match ev {
-                            DeviceEvent::PropertyChanged(ManufacturerData(data)) => {
-                                match data.get(&0x0499) {
-                                    Some(value) => handle_manufacturer_data(&metrics, &addr, value),
-                                    None => eprintln!("No data found"),
-                                }
-                            }
-                            DeviceEvent::PropertyChanged(Rssi(rssi)) => {
+                            PropertyChanged(ManufacturerData(data)) => match data.get(&0x0499) {
+                                Some(value) => handle_manufacturer_data(&metrics, &addr, value),
+                                None => eprintln!("No data found"),
+                            },
+                            PropertyChanged(Rssi(rssi)) => {
                                 metrics.set_signal_rssi(&addr, rssi as f64);
                                 #[cfg(debug_assertions)]
                                 println!("{:?} RSSI: {}", dev, rssi);
                             }
-                            DeviceEvent::PropertyChanged(AdvertisingFlags(_flags)) => {
+                            PropertyChanged(AdvertisingFlags(_flags)) => {
                                 #[cfg(debug_assertions)]
                                 println!("{:?} AdvertisingFlags: {:?}", dev, _flags);
                             }
