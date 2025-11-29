@@ -4,33 +4,46 @@ Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com
 
 ## Exposed metrics
 
-| Metric                        | v5 | v6 | E1 |
-|-------------------------------|----|----|----|
-| Temperature (°C)              | ✔️ | ✔️ | ✔️ |
-| Humidity (%RH)                | ✔️ | ✔️ | ✔️ |
-| Dew Point (°C)                | ✔️ | ✔️ | ✔️ |
-| Pressure (hPa)                | ✔️ | ✔️ | ✔️ |
-| Acceleration (g)              | ✔️ | ✗ | ✗ |
-| Battery Voltage (mV)          | ✔️ | ✗ | ✗ |
-| Move Counter                  | ✔️ | ✗ | ✗ |
-| PM 1.0 (ug/m³)                | ✗ | ✗ | ✔️ |
-| PM 2.5 (ug/m³)                | ✗ | ✔️ | ✔️ |
-| PM 4.0 (ug/m³)                | ✗ | ✗ | ✔️ |
-| PM 10.0 (ug/m³)               | ✗ | ✗ | ✔️ |
-| CO_2 (ppm)                    | ✗ | ✔️ | ✔️ |
-| VOC index                     | ✗ | ✔️ | ✔️ |
-| NO_x index                    | ✗ | ✔️ | ✔️ |
-| Air quality calibrating       | ✗ | ✔️ | ✔️ |
-| Signal Strength, rssi (dBm)   | ✔️ | ✔️ | ✔️ |
-| Transmitting Strength (dBm)   | ✔️ | ✔️ | ✔️ |
-| Last Updated                  | ✔️ | ✔️ | ✔️ |
-| Format                        | ✔️ | ✔️ | ✔️ |
-| Messages Received             | ✔️ | ✔️ | ✔️ |
+| Metric                      | Description                   | v5 | v6 | E1 |
+|-----------------------------|-------------------------------|----|----|----|
+| `ruuvi_temperature_celsius` | Temperature (°C)              | ✔️ | ✔️ | ✔️ |
+| `ruuvi_humidity_ratio`      | Humidity (%RH)                | ✔️ | ✔️ | ✔️ |
+| `ruuvi_dew_point_celsius`   | Dew Point (°C)                | ✔️ | ✔️ | ✔️ |
+| `ruuvi_pressure_hpa`        | Pressure (hPa)                | ✔️ | ✔️ | ✔️ |
+| `ruuvi_acceleration_g`      | Acceleration (g)              | ✔️ | ✗ | ✗ |
+| `ruuvi_battery_volts`       | Battery Voltage (V)          | ✔️ | ✗ | ✗ |
+| `ruuvi_movecount_total`     | Move Counter                  | ✔️ | ✗ | ✗ |
+| `ruuvi_pm1_0_ug_m3`         | PM 1.0 (ug/m³)                | ✗ | ✗ | ✔️ |
+| `ruuvi_pm2_5_ug_m3`         | PM 2.5 (ug/m³)                | ✗ | ✔️ | ✔️ |
+| `ruuvi_pm4_0_ug_m3`         | PM 4.0 (ug/m³)                | ✗ | ✗ | ✔️ |
+| `ruuvi_pm10_0_ug_m3`        | PM 10.0 (ug/m³)               | ✗ | ✗ | ✔️ |
+| `ruuvi_co2_ppm`             | CO_2 (ppm)                    | ✗ | ✔️ | ✔️ |
+| `ruuvi_voc_index`           | VOC index                     | ✗ | ✔️ | ✔️ |
+| `ruuvi_nox_index`           | NO_x index                    | ✗ | ✔️ | ✔️ |
+| `ruuvi_air_calibrating`     | Air quality calibrating       | ✗ | ✔️ | ✔️ |
+| `ruuvi_rssi_dbm`            | Signal Strength, rssi (dBm)   | ✔️ | ✔️ | ✔️ |
+| `ruuvi_txpower_dbm`         | Transmitting Strength (dBm)   | ✔️ | ✔️ | ✔️ |
+| `ruuvi_last_updated`        | Last Updated                  | ✔️ | ✔️ | ✔️ |
+| `ruuvi_frames_total`        | Messages Received             | ✔️ | ✔️ | ✔️ |
+
+Optionally, some process metrics can also being published, if enabled via environment variable. This can be helpful when running on bare metal, but is usually not needed if running in a container where container/process metrics are being collected via other mechanisms:
+
+| Metric                             | Description                                                                     |
+|------------------------------------|---------------------------------------------------------------------------------|
+| `process_cpu_seconds_total`        | Total user and system CPU time spent in seconds.                                |
+| `process_open_fds`                 | Number of open file descriptors.                                                |
+| `process_max_fds`                  | Maximum number of open file descriptors.                                        |
+| `process_virtual_memory_bytes`     | Virtual memory size in bytes.                                                   |
+| `process_virtual_memory_max_bytes` | Maximum amount of virtual memory available in bytes. (Not available on Windows) |
+| `process_resident_memory_bytes`    | Resident memory size in bytes.                                                  |
+| `process_start_time_seconds`       | Start time of the process since unix epoch in seconds.                          |
+| `process_threads`                  | Number of OS threads in the process. (Not available on Windows)                 |
 
 
 # How to run
 
 ## Experimental bluetooth features
+Needed to be able to connect to the bluetooth service as an unprivileged user.
 
 ```shell
 sudo nano /usr/lib/systemd/system/bluetooth.service
@@ -39,9 +52,21 @@ sudo systemctl daemon-reload
 sudo service bluetooth restart
 ```
 
+Modify the following line:
 ```
 ExecStart=/usr/libexec/bluetooth/bluetoothd --experimental
 ```
+
+## Environment variables
+
+| Variable                      | Description                                       | Default         |
+|-------------------------------|---------------------------------------------------|-----------------|
+| `PORT`                        | Port to listen on for the metrics endpoint        | 9185            |
+| `IDLE_TIMEOUT`                | Idle timeout for metric to be removed             | 60s             |
+| `ENABLE_PROCESS_COLLECTION`   | Enable process metrics                            | false           |
+| `PROCESS_COLLECTION_INTERVAL` | Interval with which process metrics are collected | 10s             |
+| `BLUETOOTH_DEVICE`            | Which bluetooth device to use (e.g. hci0)         | hci0            |
+
 
 ## Build & Run
 
@@ -50,7 +75,7 @@ Build and run it directly on the desired host
 
 ```shell
 cargo build --release
-PORT=9185 IDLE_TIMEOUT=60s ./target/release/ruuvi-prometheus-rs
+ENABLE_PROCESS_COLLECTION=true ./target/release/ruuvi-prometheus-rs
 ```
 
 ### Container Image
@@ -62,7 +87,7 @@ into the container.
 docker build -t <image-name> .
 docker run -v /run/dbus:/run/dbus:ro -p 9185:9185 ... <image-name>
 ```
-Depending on your setup the `--privileged` might be needed. A pre-build image
+Depending on your setup the `--privileged` flag might be needed. A pre-built image
 is published with every release, and is available via `ghcr.io/graipher/ruuvi-prometheus-rs:vX.Y.Z`.
 
 Similarly, it can be run inside a Kubernetes cluster
@@ -87,7 +112,8 @@ spec:
       hostPath:
         path: "/run/dbus"
 ```
-if only specific hosts have a bluetooth device, taints and tolerations must be used to ensure
+
+If only specific hosts have a bluetooth device, taints and tolerations must be used to ensure
 the pod is scheduled on the correct host.
 
 Theoretically we could install all of the bluetooth stack into the container and then mount the
@@ -97,12 +123,3 @@ bluetooth device directly. However, this has two downsides
 - Only a single process can bind to the underlying hardware device, so as soon as this
   hypothetical container runs no other service could use any bluethooth functionality
   on that host
-
-
-## Environment variables
-
-| Variable            | Description                                     | Default         |
-|---------------------|-------------------------------------------------|-----------------|
-| `PORT`              | Port to listen on for the metrics endpoint      | 9185            |
-| `IDLE_TIMEOUT`      | Idle timeout for metrics                        | 60s             |
-| `BLUETOOTH_DEVICE`  | Which bluetooth device to use (e.g. hci0)       | hci0            |
