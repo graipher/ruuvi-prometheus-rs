@@ -1,7 +1,11 @@
 [package]
 name = "ruuvi-prometheus-rs"
-version = "0.2.10"
+version = "0.2.11"
 edition = "2024"
+authors = ["Andreas Weiden <andreas.weiden@skillbyte.de>"]
+readme = "README.md"
+repository = "https://github.com/graipher/ruuvi-prometheus-rs"
+license = "MIT"
 
 [profile.release]
 lto = true
@@ -19,6 +23,6 @@ bluer = { version = "0.17.4", features = ["bluetoothd", "tokio-stream"] }
 futures = "0.3.31"
 metrics-process = { version = "2.4.2", features = ["use-gauge-on-cpu-seconds-total"] }
 metrics = "0.24.2"
-metrics-exporter-prometheus = "0.17.2"
+metrics-exporter-prometheus = "0.18.0"
 metrics-util = "0.20.0"
 duration-string = "0.5.3"
