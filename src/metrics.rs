@@ -1,4 +1,11 @@
+use std::net::SocketAddr;
+use std::time::Duration;
+
 use metrics::{counter, describe_counter, describe_gauge, gauge};
+use metrics_exporter_prometheus::PrometheusBuilder;
+use metrics_process::Collector as ProcessCollector;
+use metrics_util::MetricKindMask;
+use tokio::time;
 
 #[derive(Clone, Copy)]
 pub struct Metrics;
@@ -162,4 +169,25 @@ fn record_rust_info() {
         "version" => env!("CARGO_PKG_VERSION")
     )
     .set(1.0);
+}
+
+pub(crate) fn install_prometheus(binding: SocketAddr, timeout: Duration) {
+    PrometheusBuilder::new()
+        .with_http_listener(binding)
+        .idle_timeout(MetricKindMask::ALL, Some(timeout))
+        .install()
+        .expect("failed to install Prometheus exporter");
+}
+
+pub(crate) fn spawn_process_collector(collection_interval: Duration) {
+    let process_collector = ProcessCollector::default();
+    process_collector.describe();
+    process_collector.collect();
+    tokio::spawn(async move {
+        let mut interval = time::interval(collection_interval);
+        loop {
+            interval.tick().await;
+            process_collector.collect();
+        }
+    });
 }
