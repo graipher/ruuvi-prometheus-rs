@@ -1079,7 +1079,7 @@ dependencies = [
 
 [[package]]
 name = "ruuvi-prometheus-rs"
-version = "0.2.12"
+version = "0.2.13"
 dependencies = [
  "bluer",
  "compile-time",

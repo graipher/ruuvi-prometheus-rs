@@ -15,10 +15,8 @@ pub struct Config {
 
 impl Config {
     pub fn from_env() -> Self {
-        let binding: SocketAddr = env::var("BINDING")
-            .unwrap_or("0.0.0.0:9185".to_string())
-            .parse()
-            .unwrap();
+        let port = env::var("PORT").unwrap_or("9185".to_string());
+        let binding: SocketAddr = format!("0.0.0.0:{}", port).parse().unwrap();
         let idle_timeout: Duration = env::var("IDLE_TIMEOUT")
             .unwrap_or("60s".to_string())
             .parse::<DurationString>()
@@ -79,7 +77,7 @@ mod tests {
     fn loads_defaults_when_env_missing() {
         with_env(
             &[
-                ("BINDING", None),
+                ("PORT", None),
                 ("IDLE_TIMEOUT", None),
                 ("ENABLE_PROCESS_COLLECTION", None),
                 ("PROCESS_COLLECTION_INTERVAL", None),
@@ -104,7 +102,7 @@ mod tests {
     fn parses_overrides_from_env() {
         with_env(
             &[
-                ("BINDING", Some("127.0.0.1:9999")),
+                ("PORT", Some("9999")),
                 ("IDLE_TIMEOUT", Some("120s")),
                 ("ENABLE_PROCESS_COLLECTION", Some("true")),
                 ("PROCESS_COLLECTION_INTERVAL", Some("30s")),
@@ -114,7 +112,7 @@ mod tests {
                 let config = Config::from_env();
 
                 assert_eq!(
-                    "127.0.0.1:9999".parse::<SocketAddr>().unwrap(),
+                    "0.0.0.0:9999".parse::<SocketAddr>().unwrap(),
                     config.binding
                 );
                 assert_eq!(Duration::from_secs(120), config.idle_timeout);
