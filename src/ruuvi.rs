@@ -270,3 +270,147 @@ impl HasSequenceNumber for ruuvi_decoders::e1::DataFormatE1 {
         self.measurement_sequence.map(f64::from)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::metrics::{clear, counter_value, gauge_value, take_snapshot};
+
+    #[test]
+    fn dew_point_is_calculated_for_valid_input() {
+        let dew_point = dew_point_celsius(20.0, 0.5).expect("dew point calculated");
+        assert!((dew_point - 9.2674).abs() < 0.001);
+    }
+
+    #[test]
+    fn dew_point_returns_none_for_invalid_humidity() {
+        assert_eq!(None, dew_point_celsius(10.0, 0.0));
+        assert_eq!(None, dew_point_celsius(10.0, -0.1));
+        assert_eq!(None, dew_point_celsius(10.0, 1.2));
+        assert_eq!(None, dew_point_celsius(-DEW_POINT_C, 0.5));
+    }
+
+    #[test]
+    fn v5_environment_and_motion_are_scaled() {
+        let payload = ruuvi_decoders::v5::DataFormatV5 {
+            mac_address: "cbb8334c884f".into(),
+            temperature: Some(24.3),
+            humidity: Some(53.49),
+            pressure: Some(100_044.0),
+            acceleration_x: Some(4),
+            acceleration_y: Some(-4),
+            acceleration_z: Some(1036),
+            battery_voltage: Some(2977),
+            tx_power: Some(4),
+            movement_counter: Some(66),
+            measurement_sequence: Some(205),
+        };
+
+        let env = payload.environment().expect("environment");
+        assert!((env.temperature - 24.3).abs() < f64::EPSILON);
+        assert!((env.humidity_ratio - 0.5349).abs() < 1e-6);
+        assert!((env.pressure_hpa - 1000.44).abs() < 1e-6);
+
+        let motion = payload.motion().expect("motion");
+        assert!((motion.acceleration_x_g.unwrap() - 0.004).abs() < 1e-6);
+        assert!((motion.acceleration_y_g.unwrap() + 0.004).abs() < 1e-6);
+        assert!((motion.acceleration_z_g.unwrap() - 1.036).abs() < 1e-6);
+        assert!((motion.battery_voltage.unwrap() - 2.977).abs() < 1e-6);
+        assert!((motion.tx_power.unwrap() - 4.0).abs() < f64::EPSILON);
+        assert!((motion.movement_count.unwrap() - 66.0).abs() < f64::EPSILON);
+
+        assert_eq!(Some(205.0), payload.sequence_number());
+    }
+
+    #[test]
+    fn manufacturer_data_records_v5_metrics() {
+        let _guard = crate::test_utils::metrics::guard();
+        clear();
+        let metrics = Metrics::register();
+        let addr = "aa:bb:cc:dd:ee:ff";
+        let payload_hex = "0512FC5394C37C0004FFFC040CAC364200CDCBB8334C884F";
+        let payload = hex_literal::hex!("0512FC5394C37C0004FFFC040CAC364200CDCBB8334C884F");
+
+        handle_manufacturer_data(&metrics, addr, &payload);
+
+        let decoded = match ruuvi_decoders::decode(payload_hex).expect("decode V5 frame") {
+            RuuviData::V5(data) => data,
+            _ => panic!("unexpected format"),
+        };
+
+        let env = decoded.environment().expect("environment data");
+        let motion = decoded.motion().expect("motion data");
+        let dew_point = dew_point_celsius(env.temperature, env.humidity_ratio).unwrap();
+
+        let snapshot = take_snapshot();
+
+        assert_eq!(
+            Some(1),
+            counter_value(
+                &snapshot,
+                "ruuvi_frames_total",
+                &[("device", addr), ("format", "5")]
+            )
+        );
+
+        assert!(
+            gauge_value(&snapshot, "ruuvi_temperature_celsius", &[("device", addr)])
+                .is_some_and(|v| (v - env.temperature).abs() < 1e-6)
+        );
+        assert!(
+            gauge_value(&snapshot, "ruuvi_humidity_ratio", &[("device", addr)])
+                .is_some_and(|v| (v - env.humidity_ratio).abs() < 1e-6)
+        );
+        assert!(
+            gauge_value(&snapshot, "ruuvi_dew_point_celsius", &[("device", addr)])
+                .is_some_and(|v| (v - dew_point).abs() < 1e-6)
+        );
+        assert!(
+            gauge_value(&snapshot, "ruuvi_pressure_hpa", &[("device", addr)])
+                .is_some_and(|v| (v - env.pressure_hpa).abs() < 1e-6)
+        );
+
+        assert!(
+            gauge_value(
+                &snapshot,
+                "ruuvi_acceleration_g",
+                &[("device", addr), ("axis", "X")]
+            )
+            .is_some_and(|v| (v - motion.acceleration_x_g.unwrap()).abs() < 1e-6)
+        );
+        assert!(
+            gauge_value(
+                &snapshot,
+                "ruuvi_acceleration_g",
+                &[("device", addr), ("axis", "Y")]
+            )
+            .is_some_and(|v| (v - motion.acceleration_y_g.unwrap()).abs() < 1e-6)
+        );
+        assert!(
+            gauge_value(
+                &snapshot,
+                "ruuvi_acceleration_g",
+                &[("device", addr), ("axis", "Z")]
+            )
+            .is_some_and(|v| (v - motion.acceleration_z_g.unwrap()).abs() < 1e-6)
+        );
+        assert!(
+            gauge_value(&snapshot, "ruuvi_battery_volts", &[("device", addr)])
+                .is_some_and(|v| (v - motion.battery_voltage.unwrap()).abs() < 1e-6)
+        );
+        assert!(
+            gauge_value(&snapshot, "ruuvi_txpower_dbm", &[("device", addr)])
+                .is_some_and(|v| (v - motion.tx_power.unwrap()).abs() < f64::EPSILON)
+        );
+        assert!(
+            gauge_value(&snapshot, "ruuvi_movecount_total", &[("device", addr)])
+                .is_some_and(|v| (v - motion.movement_count.unwrap()).abs() < f64::EPSILON)
+        );
+        assert!(
+            gauge_value(&snapshot, "ruuvi_seqno_current", &[("device", addr)])
+                .is_some_and(
+                    |v| (v - decoded.measurement_sequence.unwrap() as f64).abs() < f64::EPSILON
+                )
+        );
+    }
+}

@@ -191,3 +191,109 @@ pub(crate) fn spawn_process_collector(collection_interval: Duration) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_utils::metrics::{clear, counter_value, gauge_value, take_snapshot};
+
+    #[test]
+    fn register_records_rust_info() {
+        let _guard = crate::test_utils::metrics::guard();
+        clear();
+
+        let _metrics = Metrics::register();
+        let snapshot = take_snapshot();
+
+        assert!(
+            gauge_value(
+                &snapshot,
+                "rust_info",
+                &[
+                    ("rustc_version", compile_time::rustc_version_str!()),
+                    ("compile_time", compile_time::datetime_str!()),
+                    ("version", env!("CARGO_PKG_VERSION"))
+                ]
+            )
+            .is_some_and(|v| (v - 1.0).abs() < f64::EPSILON)
+        );
+    }
+
+    #[test]
+    fn counters_and_gauges_are_labeled() {
+        let _guard = crate::test_utils::metrics::guard();
+        clear();
+        let metrics = Metrics::register();
+
+        metrics.inc_ruuvi_frames("aa:bb", "5");
+        metrics.set_signal_rssi("aa:bb", -55.0);
+        metrics.set_acceleration("aa:bb", "Z", 0.123);
+
+        let snapshot = take_snapshot();
+
+        assert_eq!(
+            Some(1),
+            counter_value(
+                &snapshot,
+                "ruuvi_frames_total",
+                &[("device", "aa:bb"), ("format", "5")]
+            )
+        );
+        assert!(
+            gauge_value(&snapshot, "ruuvi_rssi_dbm", &[("device", "aa:bb")])
+                .is_some_and(|v| (v + 55.0).abs() < f64::EPSILON)
+        );
+        assert!(
+            gauge_value(
+                &snapshot,
+                "ruuvi_acceleration_g",
+                &[("device", "aa:bb"), ("axis", "Z")]
+            )
+            .is_some_and(|v| (v - 0.123).abs() < f64::EPSILON)
+        );
+    }
+
+    #[test]
+    fn air_quality_and_misc_metrics_are_recorded() {
+        let _guard = crate::test_utils::metrics::guard();
+        clear();
+        let metrics = Metrics::register();
+
+        metrics.set_pm1_0("aa:bb", 1.1);
+        metrics.set_pm2_5("aa:bb", 2.2);
+        metrics.set_pm4_0("aa:bb", 4.4);
+        metrics.set_pm10_0("aa:bb", 10.1);
+        metrics.set_co2("aa:bb", 400.0);
+        metrics.set_voc("aa:bb", 50.0);
+        metrics.set_nox("aa:bb", 25.0);
+        metrics.set_calibrating("aa:bb", 1.0);
+        metrics.set_last_updated("aa:bb", 123.0);
+        metrics.set_move_count("aa:bb", 7.0);
+        metrics.set_voltage("aa:bb", 2.9);
+        metrics.set_tx_power("aa:bb", -4.0);
+        metrics.set_seqno("aa:bb", 42.0);
+
+        let snapshot = take_snapshot();
+
+        let expect = |name: &str, value: f64| {
+            assert!(
+                gauge_value(&snapshot, name, &[("device", "aa:bb")])
+                    .is_some_and(|v| (v - value).abs() < f64::EPSILON)
+            );
+        };
+
+        expect("ruuvi_pm1_0_ug_m3", 1.1);
+        expect("ruuvi_pm2_5_ug_m3", 2.2);
+        expect("ruuvi_pm4_0_ug_m3", 4.4);
+        expect("ruuvi_pm10_0_ug_m3", 10.1);
+        expect("ruuvi_co2_ppm", 400.0);
+        expect("ruuvi_voc_index", 50.0);
+        expect("ruuvi_nox_index", 25.0);
+        expect("ruuvi_air_calibrating", 1.0);
+        expect("ruuvi_last_updated", 123.0);
+        expect("ruuvi_movecount_total", 7.0);
+        expect("ruuvi_battery_volts", 2.9);
+        expect("ruuvi_txpower_dbm", -4.0);
+        expect("ruuvi_seqno_current", 42.0);
+    }
+}
