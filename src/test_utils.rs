@@ -1,9 +1,7 @@
-#![cfg(test)]
-
 pub mod metrics {
     use metrics_util::debugging::{DebugValue, DebuggingRecorder, Snapshotter};
     use std::collections::BTreeMap;
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::{Mutex, MutexGuard, OnceLock};
 
     static METRIC_LOCK: Mutex<()> = Mutex::new(());
     static SNAPSHOTTER: OnceLock<Snapshotter> = OnceLock::new();
@@ -18,7 +16,7 @@ pub mod metrics {
     }
 
     /// Serialize access to the debugging recorder to avoid cross-test races.
-    pub fn guard() -> std::sync::MutexGuard<'static, ()> {
+    pub fn guard() -> MutexGuard<'static, ()> {
         METRIC_LOCK.lock().expect("metric lock poisoned")
     }
 
@@ -55,10 +53,11 @@ pub mod metrics {
             .collect::<BTreeMap<_, _>>();
 
         data.iter().find_map(|(metric, metric_labels, value)| {
-            if metric == name && *metric_labels == expected {
-                if let DebugValue::Gauge(v) = value {
-                    return Some(v.into_inner());
-                }
+            if metric == name
+                && *metric_labels == expected
+                && let DebugValue::Gauge(v) = value
+            {
+                return Some(v.into_inner());
             }
             None
         })
@@ -75,10 +74,11 @@ pub mod metrics {
             .collect::<BTreeMap<_, _>>();
 
         data.iter().find_map(|(metric, metric_labels, value)| {
-            if metric == name && *metric_labels == expected {
-                if let DebugValue::Counter(v) = value {
-                    return Some(*v);
-                }
+            if metric == name
+                && *metric_labels == expected
+                && let DebugValue::Counter(v) = value
+            {
+                return Some(*v);
             }
             None
         })

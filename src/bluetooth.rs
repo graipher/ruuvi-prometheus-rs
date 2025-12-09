@@ -404,6 +404,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::await_holding_lock)]
     async fn process_events_stream_records_metrics() {
         let _guard = crate::test_utils::metrics::guard();
         clear();
