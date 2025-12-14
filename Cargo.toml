@@ -1,8 +1,8 @@
 [package]
 name = "ruuvi-prometheus-rs"
-version = "0.2.13"
+version = "0.2.14"
 edition = "2024"
-authors = ["Andreas Weiden <andreas.weiden@skillbyte.de>"]
+authors = ["Andreas Weiden <andreas.weiden@gmail.com>"]
 readme = "README.md"
 repository = "https://github.com/graipher/ruuvi-prometheus-rs"
 license = "MIT"
@@ -24,16 +24,16 @@ opt-level = 3
 strip = "symbols"
 
 [dependencies]
-tokio = { version = "1.43.1", features = ["rt-multi-thread"] }
-compile-time = "0.2.0"
-ruuvi-decoders = "1.0.0"
 bluer = { version = "0.17.4", features = ["bluetoothd"] }
+compile-time = "0.2.0"
+duration-string = "0.5.3"
 futures = { version = "0.3.31", default-features = false }
-metrics-process = { version = "2.4.2", features = ["use-gauge-on-cpu-seconds-total"] }
 metrics = "0.24.2"
 metrics-exporter-prometheus = { version = "0.18.0", features = ["http-listener"], default-features = false }
+metrics-process = { version = "2.4.2", features = ["use-gauge-on-cpu-seconds-total"] }
 metrics-util = { version = "0.20.0", default-features = false }
-duration-string = "0.5.3"
+ruuvi-decoders = "1.0.0"
+tokio = { version = "1.43.1", features = ["rt-multi-thread"] }
 
 [dev-dependencies]
 hex-literal = "0.4"
