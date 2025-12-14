@@ -17,7 +17,6 @@ async fn main() -> bluer::Result<()> {
 
     if config.enable_process_collection {
         spawn_process_collector(config.process_collection_interval);
-    } else {
     }
     let metrics = Metrics::register();
 
