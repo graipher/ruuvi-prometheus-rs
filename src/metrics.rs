@@ -1,5 +1,5 @@
-use std::net::SocketAddr;
 use std::time::Duration;
+use std::{net::SocketAddr, time::SystemTime};
 
 use metrics::{counter, describe_counter, describe_gauge, gauge};
 use metrics_exporter_prometheus::PrometheusBuilder;
@@ -18,6 +18,7 @@ impl Metrics {
     pub fn register() -> Self {
         Self::describe_metrics();
         record_rust_info();
+        set_process_start_time();
         Self
     }
 
@@ -156,6 +157,7 @@ impl Metrics {
         describe_gauge!("ruuvi_last_updated", "Last update of RuuviTag");
         describe_gauge!("rust_info", "Info about the Rust version");
         describe_gauge!("ruuvi_movecount_total", "Ruuvi movement counter");
+        describe_gauge!("process_start_time", "Start time of the process");
     }
 }
 
@@ -169,6 +171,14 @@ fn record_rust_info() {
         "version" => env!("CARGO_PKG_VERSION")
     )
     .set(1.0);
+}
+
+fn set_process_start_time() {
+    let start_time = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as f64;
+    gauge!("process_start_time").set(start_time);
 }
 
 pub(crate) fn install_prometheus(binding: SocketAddr, timeout: Duration) {
