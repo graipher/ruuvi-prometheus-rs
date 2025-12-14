@@ -200,6 +200,7 @@ async fn process_events_stream<S>(
 {
     while let Some(ev) = events.next().await {
         handle_device_property(&metrics, addr, ev, None);
+        metrics.update_rust_and_process_start_time(); // otherwise the metrics are removed after the idle timeout
     }
     active_devices.lock().await.remove(addr);
 }

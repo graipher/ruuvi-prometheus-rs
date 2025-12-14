@@ -8,7 +8,9 @@ use metrics_util::MetricKindMask;
 use tokio::time;
 
 #[derive(Clone, Copy)]
-pub struct Metrics;
+pub struct Metrics {
+    process_start_time: Duration,
+}
 
 impl Metrics {
     const LABEL_DEVICE: &'static str = "device";
@@ -18,8 +20,14 @@ impl Metrics {
     pub fn register() -> Self {
         Self::describe_metrics();
         record_rust_info();
-        set_process_start_time();
-        Self
+
+        let s = Self {
+            process_start_time: SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap(),
+        };
+        s.set_process_start_time(s.process_start_time);
+        s
     }
 
     pub fn inc_ruuvi_frames(&self, device: &str, format: &str) {
@@ -129,6 +137,10 @@ impl Metrics {
         gauge!("ruuvi_movecount_total", Self::LABEL_DEVICE => device_label).set(value);
     }
 
+    pub fn set_process_start_time(&self, start_time: Duration) {
+        gauge!("process_start_time").set(start_time.as_secs() as f64);
+    }
+
     fn describe_metrics() {
         describe_counter!("ruuvi_frames_total", "Total Ruuvi frames received");
         describe_gauge!("ruuvi_temperature_celsius", "Ruuvi tag sensor temperature");
@@ -159,6 +171,11 @@ impl Metrics {
         describe_gauge!("ruuvi_movecount_total", "Ruuvi movement counter");
         describe_gauge!("process_start_time", "Start time of the process");
     }
+
+    pub fn update_rust_and_process_start_time(&self) {
+        record_rust_info();
+        self.set_process_start_time(self.process_start_time);
+    }
 }
 
 fn record_rust_info() {
@@ -171,14 +188,6 @@ fn record_rust_info() {
         "version" => env!("CARGO_PKG_VERSION")
     )
     .set(1.0);
-}
-
-fn set_process_start_time() {
-    let start_time = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs() as f64;
-    gauge!("process_start_time").set(start_time);
 }
 
 pub(crate) fn install_prometheus(binding: SocketAddr, timeout: Duration) {
