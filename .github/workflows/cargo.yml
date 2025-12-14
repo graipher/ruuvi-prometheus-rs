@@ -44,7 +44,7 @@ jobs:
           cargo +stable install cargo-llvm-cov --locked
           rustup component add llvm-tools-preview --toolchain stable-x86_64-unknown-linux-gnu
       - name: Run tests with coverage
-        run: cargo llvm-cov report --cobertura --output-path cobertura.xml
+        run: cargo llvm-cov --cobertura --output-path cobertura.xml
       - name: Produce coverage report
         uses: insightsengineering/coverage-action@v3
         with:
