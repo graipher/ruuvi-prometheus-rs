@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.20
-FROM docker.io/library/rust:1.92.0-trixie AS builder
+FROM docker.io/library/rust:1.93.0-trixie AS builder
 
 RUN apt-get update && apt-get install -y libdbus-1-3 libdbus-1-dev
 

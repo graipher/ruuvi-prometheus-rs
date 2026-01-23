@@ -122,6 +122,11 @@ impl Metrics {
         gauge!("ruuvi_nox_index", Self::LABEL_DEVICE => device_label).set(value);
     }
 
+    pub fn set_air_quality_index(&self, device: &str, value: f64) {
+        let device_label = device.to_owned();
+        gauge!("ruuvi_air_quality_index", Self::LABEL_DEVICE => device_label).set(value);
+    }
+
     pub fn set_calibrating(&self, device: &str, value: f64) {
         let device_label = device.to_owned();
         gauge!("ruuvi_air_calibrating", Self::LABEL_DEVICE => device_label).set(value);
@@ -165,6 +170,7 @@ impl Metrics {
         describe_gauge!("ruuvi_co2_ppm", "Ruuvi CO2 concentration in ppm");
         describe_gauge!("ruuvi_voc_index", "Ruuvi VOC index");
         describe_gauge!("ruuvi_nox_index", "Ruuvi NOx index");
+        describe_gauge!("ruuvi_air_quality_index", "Ruuvi Air Quality Index");
         describe_gauge!("ruuvi_air_calibrating", "Ruuvi calibrating");
         describe_gauge!("ruuvi_last_updated", "Last update of RuuviTag");
         describe_gauge!("rust_info", "Info about the Rust version");

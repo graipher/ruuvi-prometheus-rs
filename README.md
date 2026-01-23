@@ -10,8 +10,11 @@ Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com
 | `ruuvi_humidity_ratio`      | Humidity (%RH)                | ✔️ | ✔️ | ✔️ |
 | `ruuvi_dew_point_celsius`   | Dew Point (°C)                | ✔️ | ✔️ | ✔️ |
 | `ruuvi_pressure_hpa`        | Pressure (hPa)                | ✔️ | ✔️ | ✔️ |
+| `ruuvi_rssi_dbm`            | Signal Strength, rssi (dBm)   | ✔️ | ✔️ | ✔️ |
+| `ruuvi_last_updated`        | Last Updated                  | ✔️ | ✔️ | ✔️ |
+| `ruuvi_frames_total`        | Messages Received             | ✔️ | ✔️ | ✔️ |
 | `ruuvi_acceleration_g`      | Acceleration (g)              | ✔️ | ✗ | ✗ |
-| `ruuvi_battery_volts`       | Battery Voltage (V)          | ✔️ | ✗ | ✗ |
+| `ruuvi_battery_volts`       | Battery Voltage (V)           | ✔️ | ✗ | ✗ |
 | `ruuvi_txpower_dbm`         | Transmitting Strength (dBm)   | ✔️ | ✗ | ✗ |
 | `ruuvi_movecount_total`     | Move Counter                  | ✔️ | ✗ | ✗ |
 | `ruuvi_pm1_0_ug_m3`         | PM 1.0 (ug/m³)                | ✗ | ✗ | ✔️ |
@@ -21,10 +24,8 @@ Listen to BLE advertisements of Ruuvi tags. Supports [v5](https://docs.ruuvi.com
 | `ruuvi_co2_ppm`             | CO_2 (ppm)                    | ✗ | ✔️ | ✔️ |
 | `ruuvi_voc_index`           | VOC index                     | ✗ | ✔️ | ✔️ |
 | `ruuvi_nox_index`           | NO_x index                    | ✗ | ✔️ | ✔️ |
+| `ruuvi_air_quality_index`   | Air quality index             | ✗ | ✔️ | ✔️ |
 | `ruuvi_air_calibrating`     | Air quality calibrating       | ✗ | ✔️ | ✔️ |
-| `ruuvi_rssi_dbm`            | Signal Strength, rssi (dBm)   | ✔️ | ✔️ | ✔️ |
-| `ruuvi_last_updated`        | Last Updated                  | ✔️ | ✔️ | ✔️ |
-| `ruuvi_frames_total`        | Messages Received             | ✔️ | ✔️ | ✔️ |
 
 Optionally, some process metrics can also being published, if enabled via environment variable. This can be helpful when running on bare metal, but is usually not needed if running in a container where container/process metrics are being collected via other mechanisms:
 

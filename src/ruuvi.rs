@@ -83,6 +83,14 @@ pub(crate) fn apply_motion_metrics<T: HasMotion>(metrics: &Metrics, addr: &str, 
     }
 }
 
+const AQI_MAX: f64 = 100.;
+const PM2_5_MAX: f64 = 60.;
+const PM2_5_MIN: f64 = 0.;
+const PM2_5_SCALE: f64 = AQI_MAX / (PM2_5_MAX - PM2_5_MIN); // ≈ 1.6667
+const CO2_MAX: f64 = 2300.;
+const CO2_MIN: f64 = 420.;
+const CO2_SCALE: f64 = AQI_MAX / (CO2_MAX - CO2_MIN); // ≈ 0.05319
+
 pub(crate) fn apply_air_quality_metrics<T: HasAirQuality>(metrics: &Metrics, addr: &str, data: &T) {
     if let Some(air) = data.air_quality() {
         if let Some(pm1_0) = air.pm1_0 {
@@ -90,6 +98,23 @@ pub(crate) fn apply_air_quality_metrics<T: HasAirQuality>(metrics: &Metrics, add
         }
         if let Some(pm2_5) = air.pm2_5 {
             metrics.set_pm2_5(addr, pm2_5);
+            if let Some(co2) = air.co2 {
+                let pm2_5_clamped = pm2_5.clamp(PM2_5_MIN, PM2_5_MAX);
+                let co2_clamped = co2.clamp(CO2_MIN, CO2_MAX);
+
+                let pm_term = (pm2_5_clamped - PM2_5_MIN) * PM2_5_SCALE;
+                let co2_term = (co2_clamped - CO2_MIN) * CO2_SCALE;
+
+                let raw = AQI_MAX - (pm_term.powi(2) + co2_term.powi(2)).sqrt();
+
+                let aqi = if raw.is_nan() {
+                    0.0
+                } else {
+                    raw.clamp(0., AQI_MAX).round()
+                };
+
+                metrics.set_air_quality_index(addr, aqi);
+            }
         }
         if let Some(pm4_0) = air.pm4_0 {
             metrics.set_pm4_0(addr, pm4_0);
