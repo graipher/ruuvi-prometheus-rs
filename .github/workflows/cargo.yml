@@ -43,7 +43,11 @@ jobs:
 
       - name: Install llvm-cov
         run: |
-          cargo +stable install cargo-llvm-cov --locked
+          if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+            cargo +stable install cargo-llvm-cov --locked
+          else
+            echo "cargo-llvm-cov already installed; skipping"
+          fi
           rustup component add llvm-tools-preview --toolchain stable-x86_64-unknown-linux-gnu
       - name: Run tests with coverage
         run: cargo llvm-cov --cobertura --output-path cobertura.xml
